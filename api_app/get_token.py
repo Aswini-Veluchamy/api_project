@@ -56,6 +56,22 @@ def get_openstack_token(username, password, domain):
             tenant_list.append(project_json.get("name"))
     return x.status_code, token, tenant_list
 
+def get_cisco_tenant_list(cisco_token):
+    url = f"{CISCO_BASE_ROUTE_URL}/node/class/fvTenant.json"  # Replace <ACI_CONTROLLER_IP> with your ACI controller's IP
+    headers = {
+        "Content-Type": "application/json",
+        "Cookie": f"APIC-cookie={cisco_token}"
+    }
+
+    response = requests.get(url, headers=headers, verify=False)  # Set verify=False to ignore SSL warnings; set to True if using valid certs
+    if response.status_code != 200:
+        raise Exception(f"Failed to retrieve tenant list, status code: {response.status_code}")
+
+    tenants = response.json()["imdata"]
+    cisco_tenant_list = [tenant["fvTenant"]["attributes"]["name"] for tenant in tenants]
+
+    return cisco_tenant_list
+
 def get_vrf_list(token, base_tenant):
     vrf_url = f"{CISCO_BASE_ROUTE_URL}/node/mo/uni/tn-{base_tenant}.json?query-target=children&target-subtree-class=fvCtx"
     headers = {"Cookie": f"APIC-cookie={token}"}
@@ -170,7 +186,7 @@ def create_bd(bd_name, vrf_name, base_tenant, gateway_ip, cidr, cisco_token):
             ]
         }
     }
-    url = f"https://172.31.1.11/api/node/mo/uni/tn-{base_tenant}.json"
+    url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}.json"
     response = create_resource(cisco_token, url, payload)
     print(f"create_bd response: {response.status_code}, {response.text}")
     return response
@@ -192,7 +208,7 @@ def create_epg(ap_name, epg_name, bd_name, cisco_token, base_tenant):
             ]
         }
     }
-    url = f"https://172.31.1.11/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}.json"
+    url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}.json"
     response = create_resource(cisco_token, url, payload)
     print(f"create_epg response: {response.status_code}, {response.text}")
     return response
@@ -208,7 +224,7 @@ def attach_phy_domain(ap_name, epg_name, phys_domain_name, base_tenant, cisco_to
             "children": []
         }
     }
-    url = f"https://172.31.1.11/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rsdomAtt-[uni/phys-{phys_domain_name}].json"
+    url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rsdomAtt-[uni/phys-{phys_domain_name}].json"
     response = create_resource(cisco_token, url, payload)
     print(f"attach_phy_domain response: {response.status_code}, {response.text}")
     return response
@@ -224,7 +240,7 @@ def attach_aep(ap_name, epg_name, aep_name, vlan, base_tenant, cisco_token):
             "children": []
         }
     }
-    url = f"https://172.31.1.11/api/node/mo/uni/infra/attentp-{aep_name}/gen-default.json"
+    url = f"https://172.31.1.12/api/node/mo/uni/infra/attentp-{aep_name}/gen-default.json"
     response = create_resource(cisco_token, url, payload)
     print(f"attach_aep response: {response.status_code}, {response.text}")
     return response
@@ -279,7 +295,7 @@ def create_subnet(network_id, subnet_ip, subnet_name, gateway_ip, token):
     subnet_id = subnet_response.json()['subnet']['id']
     return subnet_id
 
-def delete_network(network_id, token):
+def delete_network_for_subnet(network_id, token):
     headers = {"X-Auth-Token": token}
     delete_network_url = f"{NEUTRON_BASE_URL}/networks/{network_id}"
     delete_response = requests.delete(delete_network_url, headers=headers, verify=False)

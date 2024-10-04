@@ -124,13 +124,13 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-AUTHENTICATION_BACKENDS = [
-    'api_app.backends.OpenStackBackend',  # Custom backend for OpenStack authentication
-]
-
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'api_app.authentication.OpenStackAuthentication',  # Custom authentication class
-    ),
-}
+#
+# AUTHENTICATION_BACKENDS = [
+#     'api_app.backends.OpenStackBackend',  # Custom backend for OpenStack authentication
+# ]
+#
+# REST_FRAMEWORK = {
+#     'DEFAULT_AUTHENTICATION_CLASSES': (
+#         'api_app.authentication.OpenStackAuthentication',  # Custom authentication class
+#     ),
+# }
