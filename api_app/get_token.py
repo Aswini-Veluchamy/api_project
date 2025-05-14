@@ -142,10 +142,9 @@ def get_physical_domains(token):
         return phy_list
     return []
 
-def get_access_policies(token):
+def get_access_policies(cisco_headers):
     pol_url = f"{CISCO_BASE_ROUTE_URL}/node/class/infraAttEntityP.json"
-    headers = {"Cookie": f"APIC-cookie={token}"}
-    pol_response = requests.get(pol_url, headers=headers, verify=False)
+    pol_response = requests.get(pol_url, headers=cisco_headers, verify=False)
 
     if pol_response.status_code == 200:
         pol_data_json = pol_response.json().get("imdata", [])
@@ -166,7 +165,9 @@ def create_bd(bd_name, vrf_name, base_tenant, gateway_ip, cidr, cisco_token):
     payload = {
         "fvBD": {
             "attributes": {
-                "name": bd_name
+                "name": bd_name,
+                "unkMacUcastAct": "flood",
+                "arpFlood": "true",
             },
             "children": [
                 {
@@ -260,18 +261,19 @@ def create_openstack_network(token, network_name, admin_state, mtu):
             'name': network_name,
             'admin_state_up': admin_state,
             'provider:network_type': 'vlan',
-            'provider:physical_network': 'dcfabric',
+            'provider:physical_network': 'physnet1',
             'mtu': mtu
         }
     }
     network_url = f"{NEUTRON_BASE_URL}/networks"
     network_response = requests.post(network_url, json=network_data, verify=False, headers=headers)
-
+    print(network_response.json())
     if network_response.status_code != 201:
         return None, None
 
     network_id = network_response.json()['network']['id']
     segment_id = network_response.json()['network'].get('provider:segmentation_id')
+    print(f"network id: {network_id}, segmentation id: {segment_id}")
     return network_id, segment_id
 
 
@@ -299,6 +301,32 @@ def delete_network_for_subnet(network_id, token):
     headers = {"X-Auth-Token": token}
     delete_network_url = f"{NEUTRON_BASE_URL}/networks/{network_id}"
     delete_response = requests.delete(delete_network_url, headers=headers, verify=False)
+    print(delete_network_url)
+    print(delete_response)
     if delete_response.status_code != 204:
         print(f"Failed to delete network: {delete_response.text}")
 
+def name_matches_base_tenant(name, base_tenant):
+    return (name.split('_')[0] == base_tenant) or (name.split('-')[0] == base_tenant)
+
+def is_vlan_within_range(segment_id, base_tenant, cookies):
+    vlan_pool_url = 'https://172.31.1.12/api/node/class/fvnsVlanInstP.json'
+    response = requests.get(vlan_pool_url, cookies=cookies, verify=False)
+    vlan_pools = response.json().get('imdata', [])
+
+    for vlan_pool in vlan_pools:
+        dn = vlan_pool['fvnsVlanInstP']['attributes']['dn']
+        name = vlan_pool['fvnsVlanInstP']['attributes']['name']
+        vlan_pool_dn = dn.split('/')[2]
+        vlan_range_url = f'https://172.31.1.12/api/node/mo/uni/infra/{vlan_pool_dn}.json?query-target=subtree&target-subtree-class=fvnsEncapBlk'
+        range_response = requests.get(vlan_range_url, cookies=cookies, verify=False)
+        vlan_ranges = range_response.json().get('imdata', [])
+
+        if name_matches_base_tenant(name, base_tenant):
+            for vlan_range in vlan_ranges:
+                if 'fvnsEncapBlk' in vlan_range:
+                    from_vlan = int(vlan_range['fvnsEncapBlk']['attributes']['from'].split('-')[1])
+                    to_vlan = int(vlan_range['fvnsEncapBlk']['attributes']['to'].split('-')[1])
+                    if from_vlan <= segment_id <= to_vlan:
+                        return True
+    return False
