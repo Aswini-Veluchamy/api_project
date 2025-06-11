@@ -252,7 +252,7 @@ class Network(APIView):
                 'admin_state_up': new_admin_state,
             }
         }
-        network_url = f"https://neutron-ovn.tcsecp.com:9696/v2.0/networks/{network_id}"
+        network_url = f"https://neutron.tcsecp.com:9696/v2.0/networks/{network_id}"
         response = requests.put(network_url, json=network_data, verify=False, headers=headers)
 
         if response.status_code == 200:
@@ -299,7 +299,7 @@ class Network(APIView):
         headers = {"X-Auth-Token": token}
 
         # Delete Network
-        delete_network_url = f"https://neutron-ovn.tcsecp.com:9696/v2.0/networks/{network_id}"
+        delete_network_url = f"https://neutron.tcsecp.com:9696/v2.0/networks/{network_id}"
         delete_network_response = requests.delete(delete_network_url, headers=headers, verify=False)
 
         if delete_network_response.status_code == 204:

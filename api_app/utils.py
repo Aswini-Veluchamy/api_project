@@ -8,7 +8,7 @@ from rest_framework import status
 from django.conf import settings
 import requests
 SECRET_KEY = settings.SECRET_KEY
-CISCO_AUTH_URL = "https://172.31.1.12/api/aaaLogin.json"
+CISCO_AUTH_URL = "https://172.31.231.91/api/aaaLogin.json"
 
 
 def user_login(domain, username, password):
@@ -45,7 +45,7 @@ def token_required(func):
     return decorated
 
 def get_openstack_token(username, password, domain):
-    url = 'https://keystone-ovn.tcsecp.com:5000/v3/auth/tokens'
+    url = 'https://keystone.tcsecp.com:5000/v3/auth/tokens'
     myobj = {
         "auth": {
             "identity": {
