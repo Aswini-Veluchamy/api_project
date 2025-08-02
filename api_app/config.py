@@ -1,6 +1,6 @@
 # Cisco parameters
 CISCO_AUTH_URL = "https://172.31.231.91/api/aaaLogin.json"
-CISCO_REFRESH_URL = "https://172.31.231.91//api/aaaRefresh.json"
+CISCO_REFRESH_URL = "https://172.31.231.91/api/aaaRefresh.json"
 CISCO_USER = "api_admin"
 CISCO_PASS = "Admin#1234"
 

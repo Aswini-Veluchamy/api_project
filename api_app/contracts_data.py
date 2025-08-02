@@ -32,14 +32,14 @@ def contracts_list(cisco_token, base_tenant):
 
 def contract_exists(contract_name, base_tenant, cisco_token):
     cisco_headers = {"Cookie": f"APIC-cookie={cisco_token}"}
-    contract_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}.json"
+    contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}.json"
     response = requests.get(contract_url, headers=cisco_headers, verify=False)
     return len(response.json().get('imdata', [])) > 0
 
 
 def subject_exists(subject_name, base_tenant, contract_name, cisco_token):
     cisco_headers = {"Cookie": f"APIC-cookie={cisco_token}"}
-    subject_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}.json"
+    subject_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}.json"
     response = requests.get(subject_url, headers=cisco_headers, verify=False)
     return len(response.json().get('imdata', [])) > 0
 

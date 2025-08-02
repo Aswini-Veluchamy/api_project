@@ -2,7 +2,7 @@ from .config import CISCO_BASE_ROUTE_URL, NEUTRON_BASE_URL
 import requests
 
 def get_vrf_from_bd(base_tenant, bd_name, cisco_token):
-    url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/BD-{bd_name}.json?query-target=subtree&target-subtree-class=fvRsCtx"
+    url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/BD-{bd_name}.json?query-target=subtree&target-subtree-class=fvRsCtx"
     headers = {
         "Cookie": f"APIC-cookie={cisco_token}"
     }

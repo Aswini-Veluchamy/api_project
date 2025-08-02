@@ -2,6 +2,7 @@ import requests
 from .config import CISCO_PASS, CISCO_USER, CISCO_AUTH_URL
 from .config import KEYSTONE_URL, CISCO_BASE_ROUTE_URL, CISCO_REFRESH_URL, NEUTRON_BASE_URL
 
+
 def get_cisco_token():
     login_data = {
         "aaaUser": {
@@ -19,6 +20,7 @@ def get_cisco_token():
     else:
         raise Exception('Failed to retrieve Cisco token. Please check user details.')
 
+
 def refresh_cisco_token(token):
     headers = {"Cookie": f"APIC-cookie={token}"}
     refresh_response = requests.post(CISCO_REFRESH_URL, headers=headers, verify=False)
@@ -28,6 +30,7 @@ def refresh_cisco_token(token):
         return new_token
     else:
         raise Exception('Failed to refresh Cisco token.')
+
 
 def get_openstack_token(username, password, domain):
     url = KEYSTONE_URL
@@ -56,6 +59,7 @@ def get_openstack_token(username, password, domain):
             tenant_list.append(project_json.get("name"))
     return x.status_code, token, tenant_list
 
+
 def get_cisco_tenant_list(cisco_token):
     url = f"{CISCO_BASE_ROUTE_URL}/node/class/fvTenant.json"  # Replace <ACI_CONTROLLER_IP> with your ACI controller's IP
     headers = {
@@ -72,6 +76,7 @@ def get_cisco_tenant_list(cisco_token):
 
     return cisco_tenant_list
 
+
 def get_vrf_list(token, base_tenant):
     vrf_url = f"{CISCO_BASE_ROUTE_URL}/node/mo/uni/tn-{base_tenant}.json?query-target=children&target-subtree-class=fvCtx"
     headers = {"Cookie": f"APIC-cookie={token}"}
@@ -83,6 +88,7 @@ def get_vrf_list(token, base_tenant):
         return vrf_list
     return []
 
+
 def get_bd_list(token, base_tenant):
     bd_url = f"{CISCO_BASE_ROUTE_URL}/node/mo/uni/tn-{base_tenant}.json?query-target=children&target-subtree-class=fvBD"
     headers = {"Cookie": f"APIC-cookie={token}"}
@@ -93,6 +99,7 @@ def get_bd_list(token, base_tenant):
         bd_list = [bd.get("fvBD", {}).get("attributes", {}).get("name") for bd in bd_data_json]
         return bd_list
     return []
+
 
 def get_ap_list(token, base_tenant):
     ap_url = f"{CISCO_BASE_ROUTE_URL}/node/mo/uni/tn-{base_tenant}.json?query-target=children&target-subtree-class=fvAp"
@@ -120,6 +127,7 @@ def get_epg_list(token, base_tenant):
             epg_list.extend([epg.get("fvAEPg", {}).get("attributes", {}).get("name") for epg in epg_data_json])
     return epg_list
 
+
 def get_bd_subnet_data(token):
     bd_url = f"{CISCO_BASE_ROUTE_URL}/node/class/fvSubnet.json"
     headers = {"Cookie": f"APIC-cookie={token}"}
@@ -131,6 +139,7 @@ def get_bd_subnet_data(token):
         subnet_data = {bd.get("fvSubnet", {}).get("attributes", {}).get('uid'): bd.get("fvSubnet", {}).get("attributes", {}).get('ip') for bd in bd_data_json}
     return subnet_data
 
+
 def get_physical_domains(token):
     phy_url = f"{CISCO_BASE_ROUTE_URL}/node/class/physDomP.json"
     headers = {"Cookie": f"APIC-cookie={token}"}
@@ -141,6 +150,7 @@ def get_physical_domains(token):
         phy_list = [phy.get("physDomP", {}).get("attributes", {}).get("name") for phy in phy_data_json]
         return phy_list
     return []
+
 
 def get_access_policies(cisco_headers):
     pol_url = f"{CISCO_BASE_ROUTE_URL}/node/class/infraAttEntityP.json"
@@ -187,10 +197,11 @@ def create_bd(bd_name, vrf_name, base_tenant, gateway_ip, cidr, cisco_token):
             ]
         }
     }
-    url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}.json"
+    url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}.json"
     response = create_resource(cisco_token, url, payload)
     print(f"create_bd response: {response.status_code}, {response.text}")
     return response
+
 
 def create_epg(ap_name, epg_name, bd_name, cisco_token, base_tenant):
     payload = {
@@ -209,10 +220,11 @@ def create_epg(ap_name, epg_name, bd_name, cisco_token, base_tenant):
             ]
         }
     }
-    url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}.json"
+    url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}.json"
     response = create_resource(cisco_token, url, payload)
     print(f"create_epg response: {response.status_code}, {response.text}")
     return response
+
 
 def attach_phy_domain(ap_name, epg_name, phys_domain_name, base_tenant, cisco_token):
     payload = {
@@ -225,10 +237,11 @@ def attach_phy_domain(ap_name, epg_name, phys_domain_name, base_tenant, cisco_to
             "children": []
         }
     }
-    url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rsdomAtt-[uni/phys-{phys_domain_name}].json"
+    url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rsdomAtt-[uni/phys-{phys_domain_name}].json"
     response = create_resource(cisco_token, url, payload)
     print(f"attach_phy_domain response: {response.status_code}, {response.text}")
     return response
+
 
 def attach_aep(ap_name, epg_name, aep_name, vlan, base_tenant, cisco_token):
     payload = {
@@ -241,7 +254,7 @@ def attach_aep(ap_name, epg_name, aep_name, vlan, base_tenant, cisco_token):
             "children": []
         }
     }
-    url = f"https://172.31.1.12/api/node/mo/uni/infra/attentp-{aep_name}/gen-default.json"
+    url = f"https://172.31.231.91/api/node/mo/uni/infra/attentp-{aep_name}/gen-default.json"
     response = create_resource(cisco_token, url, payload)
     print(f"attach_aep response: {response.status_code}, {response.text}")
     return response
@@ -297,6 +310,7 @@ def create_subnet(network_id, subnet_ip, subnet_name, gateway_ip, token):
     subnet_id = subnet_response.json()['subnet']['id']
     return subnet_id
 
+
 def delete_network_for_subnet(network_id, token):
     headers = {"X-Auth-Token": token}
     delete_network_url = f"{NEUTRON_BASE_URL}/networks/{network_id}"
@@ -306,11 +320,13 @@ def delete_network_for_subnet(network_id, token):
     if delete_response.status_code != 204:
         print(f"Failed to delete network: {delete_response.text}")
 
+
 def name_matches_base_tenant(name, base_tenant):
     return (name.split('_')[0] == base_tenant) or (name.split('-')[0] == base_tenant)
 
+
 def is_vlan_within_range(segment_id, base_tenant, cookies):
-    vlan_pool_url = 'https://172.31.1.12/api/node/class/fvnsVlanInstP.json'
+    vlan_pool_url = 'https://172.31.231.91/api/node/class/fvnsVlanInstP.json'
     response = requests.get(vlan_pool_url, cookies=cookies, verify=False)
     vlan_pools = response.json().get('imdata', [])
 
@@ -318,7 +334,7 @@ def is_vlan_within_range(segment_id, base_tenant, cookies):
         dn = vlan_pool['fvnsVlanInstP']['attributes']['dn']
         name = vlan_pool['fvnsVlanInstP']['attributes']['name']
         vlan_pool_dn = dn.split('/')[2]
-        vlan_range_url = f'https://172.31.1.12/api/node/mo/uni/infra/{vlan_pool_dn}.json?query-target=subtree&target-subtree-class=fvnsEncapBlk'
+        vlan_range_url = f'https://172.31.231.91/api/node/mo/uni/infra/{vlan_pool_dn}.json?query-target=subtree&target-subtree-class=fvnsEncapBlk'
         range_response = requests.get(vlan_range_url, cookies=cookies, verify=False)
         vlan_ranges = range_response.json().get('imdata', [])
 

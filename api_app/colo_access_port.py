@@ -1,7 +1,8 @@
 import requests
 import re
+
 def get_leaf_node_ids(cisco_headers):
-    url = "https://172.31.1.12/api/node/class/topology/pod-1/l1PhysIf.json"
+    url = "https://172.31.231.91/api/node/class/topology/pod-1/l1PhysIf.json"
     response = requests.get(url, headers=cisco_headers, verify=False)
     response.raise_for_status()
     imdata = response.json().get('imdata', [])
@@ -17,7 +18,7 @@ def get_leaf_node_ids(cisco_headers):
     })
 
     # Nodes to be excluded
-    exclude_nodes = {'node-601', 'node-602'}
+    exclude_nodes = {'node-501', 'node-502'}
 
     # Filter out the excluded node IDs
     all_node_ids = [node for node in filtered_node_ids if node not in exclude_nodes]
@@ -31,7 +32,7 @@ def get_leaf_node_ids(cisco_headers):
 def get_node_details(cisco_headers, node_id, base_tenant):
     node_details = []
 
-    url = f"https://172.31.1.12/api/node/class/topology/pod-1/{node_id}/l1PhysIf.json?rsp-subtree=children&rsp-subtree-class=ethpmPhysIf"
+    url = f"https://172.31.231.91/api/node/class/topology/pod-1/{node_id}/l1PhysIf.json?rsp-subtree=children&rsp-subtree-class=ethpmPhysIf"
     response = requests.get(url, headers=cisco_headers, verify=False)
     response.raise_for_status()
     data = response.json().get('imdata', [])
@@ -70,7 +71,7 @@ def get_node_details(cisco_headers, node_id, base_tenant):
 def get_unused_interfaces(cisco_headers, node_id, base_tenant):
     unused_interfaces = []
 
-    url = f"https://172.31.1.12/api/node/class/topology/pod-1/{node_id}/l1PhysIf.json?rsp-subtree=children&rsp-subtree-class=ethpmPhysIf"
+    url = f"https://172.31.231.91/api/node/class/topology/pod-1/{node_id}/l1PhysIf.json?rsp-subtree=children&rsp-subtree-class=ethpmPhysIf"
     response = requests.get(url, headers=cisco_headers, verify=False)
     response.raise_for_status()
     node_details = response.json().get('imdata', [])
@@ -92,9 +93,8 @@ def get_unused_interfaces(cisco_headers, node_id, base_tenant):
     return unused_interfaces
 
 
-
 def is_policy_group_already_used(cisco_headers, vpc_policy_groups):
-    url = f"https://172.31.1.12/api/node/mo/uni/infra/funcprof/accbundle-{vpc_policy_groups}.json?query-target=children&target-subtree-class=relnFrom"
+    url = f"https://172.31.231.91/api/node/mo/uni/infra/funcprof/accbundle-{vpc_policy_groups}.json?query-target=children&target-subtree-class=relnFrom"
     try:
         response = requests.get(url, headers=cisco_headers, verify=False)
         response.raise_for_status()
@@ -105,7 +105,7 @@ def is_policy_group_already_used(cisco_headers, vpc_policy_groups):
 
 
 def get_all_leaf_profiles(cisco_headers):
-    url = 'https://172.31.1.12/api/node/class/infraAccPortP.json'
+    url = 'https://172.31.231.91/api/node/class/infraAccPortP.json'
     response = requests.get(url, headers=cisco_headers, verify=False)
     response.raise_for_status()
     leaf_profiles = response.json().get('imdata', [])
@@ -123,24 +123,38 @@ def get_all_leaf_profiles(cisco_headers):
 
 
 def get_policy_groups(cisco_headers, profile_name, base_tenant):
-    url = f"https://172.31.1.12/api/node/mo/uni/infra/accportprof-{profile_name}.json?query-target=subtree&target-subtree-class=infraHPortS&target-subtree-class=infraPortBlk,infraRsAccBaseGrp"
+    url = f"https://172.31.231.91/api/node/mo/uni/infra/accportprof-{profile_name}.json?query-target=subtree&target-subtree-class=infraHPortS&target-subtree-class=infraPortBlk,infraRsAccBaseGrp"
     response = requests.get(url, headers=cisco_headers, verify=False)
     response.raise_for_status()
     data = response.json().get("imdata", [])
 
-    # Initialize empty lists to hold extracted data
     rs_acc_base_grp_data = []
-    infra_port_blk_data = []
-    profile_description = ''
+    profile_description_map = {}
 
+    # First, map all HPortS dn to their descriptions
+    for item in data:
+        if "infraHPortS" in item:
+            attributes = item["infraHPortS"]["attributes"]
+            dn = attributes.get("dn", "")
+            descr = attributes.get("descr", "")
+            profile_description_map[dn] = descr
+
+    # Process RsAccBaseGrp and filter by matching HPortS description
     for item in data:
         if "infraRsAccBaseGrp" in item:
             attributes = item["infraRsAccBaseGrp"]["attributes"]
-            dn_parts = attributes["dn"].split('/')[-2]
-            dn_parts1 = attributes["dn"].split('/')[-3]
+            dn = attributes["dn"]
+            hport_dn = "/".join(dn.split('/')[:-1])  # Parent DN of RsAccBaseGrp is HPortS
+
+            descr = profile_description_map.get(hport_dn, "")
+            if descr != base_tenant:
+                continue  # Skip if description doesn't match exactly
+
+            dn_parts = dn.split('/')[-2]
+            dn_parts1 = dn.split('/')[-3]
             if dn_parts1.startswith('accportprof-'):
-                # Remove any suffix like '-IntProf'
                 profile_name = dn_parts1.split('-IntProf')[0]
+
             tdn = attributes["tDn"].split('/')[-1]
             if 'accbundle' in tdn:
                 tdn = tdn.split('accbundle-')[1]
@@ -148,12 +162,17 @@ def get_policy_groups(cisco_headers, profile_name, base_tenant):
                 tdn = tdn.split('accportgrp-')[1]
             else:
                 tdn = None
+
             rs_acc_base_grp_data.append({
                 'dn': dn_parts.split('-')[1],
                 'profile_name': profile_name.split('accportprof-')[1],
-                'tdn': tdn
+                'tdn': tdn,
+                'descr': descr  # Include matching description
             })
-        elif "infraPortBlk" in item:
+
+    # Add fromPort/fromCard info
+    for item in data:
+        if "infraPortBlk" in item:
             attributes = item["infraPortBlk"]["attributes"]
             from_port = attributes["fromPort"]
             from_card = attributes["fromCard"]
@@ -161,24 +180,7 @@ def get_policy_groups(cisco_headers, profile_name, base_tenant):
                 if entry['dn'] in attributes["dn"]:
                     entry['fromPort'] = from_port
                     entry['fromCard'] = from_card
-        elif "infraHPortS" in item:
-            attributes = item["infraHPortS"]["attributes"]
-            profile_description = attributes["descr"]
 
-    # Only include the data if the description matches the base_tenant
-    if profile_description == base_tenant:
-        # Generate final output
-        output = [{
-            'dn': item['dn'],
-            'profile_name': item['profile_name'],
-            'tdn': item['tdn'],
-            'fromPort': item['fromPort'],
-            'fromCard': item['fromCard'],
-            'descr': profile_description  # Add the description to the output
-        } for item in rs_acc_base_grp_data]
-    else:
-        output = []  # No data if the description doesn't match
-
-    return output
+    return rs_acc_base_grp_data
 
 

@@ -5,6 +5,7 @@ import requests
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 import urllib3
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 #AUTHENTICATION
@@ -34,6 +35,12 @@ from .colo_policy_group import get_all_policy_groups, policy_group_exists
 from .colo_access_port import get_node_details, get_leaf_node_ids, get_all_leaf_profiles
 from .colo_access_port import get_unused_interfaces
 from .colo_access_port import get_policy_groups, is_policy_group_already_used
+#COLO STATIC EPG
+from .deploy_static_epg import colo_epg_list, get_epg_interfaces, get_vlan_epg_details, get_ap_list, \
+    get_aep_name_for_epg
+#L3OUT
+from .l3out import l3_out_list, get_vrf_list
+
 
 ############################################
 ############### USER LOGIN #################
@@ -66,6 +73,7 @@ class Zones(APIView):
         user = request.user
         base_tenant = user.get('tenant_list')[0]
         vrf_data = vrf_list(cisco_token, base_tenant)
+        print(vrf_data)
         ap_data = ap_list(cisco_token, base_tenant)
 
         return Response({'vrf_data': vrf_data, 'ap_data': ap_data}, status=status.HTTP_200_OK)
@@ -102,7 +110,7 @@ class Zones(APIView):
                 }
             }
         }
-        vrf_creation_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}.json"
+        vrf_creation_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}.json"
         vrf_response = requests.post(vrf_creation_url, headers=cisco_headers, json=vrf_payload, verify=False)
 
         if vrf_response.status_code == 200:
@@ -114,7 +122,7 @@ class Zones(APIView):
                     }
                 }
             }
-            ap_creation_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}.json"
+            ap_creation_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}.json"
             ap_response = requests.post(ap_creation_url, headers=cisco_headers, json=ap_payload, verify=False)
 
             if ap_response.status_code == 200:
@@ -122,7 +130,7 @@ class Zones(APIView):
                 return Response({'status': 'success', "message": messages})
             else:
                 # Rollback Zone creation if AP creation fails
-                rollback_vrf_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/ctx-{vrf_zone_name}.json"
+                rollback_vrf_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ctx-{vrf_zone_name}.json"
                 requests.delete(rollback_vrf_url, headers=cisco_headers, verify=False)
                 messages = f"Failed to create Zone"
                 return Response({'status': 'error', "message": messages})
@@ -305,7 +313,7 @@ class Network(APIView):
         if delete_network_response.status_code == 204:
             # Delete Bridge Domain
             bd_dn = f"uni/tn-{base_tenant}/BD-{bd_name}"
-            delete_bd_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/BD-{bd_name}.json"
+            delete_bd_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/BD-{bd_name}.json"
             bd_payload = {
                 "fvBD": {
                     "attributes": {
@@ -319,7 +327,7 @@ class Network(APIView):
 
             # Delete EPG
             epg_dn = f"uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}"
-            delete_epg_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}.json"
+            delete_epg_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}.json"
             epg_payload = {
                 "fvAEPg": {
                     "attributes": {
@@ -333,7 +341,7 @@ class Network(APIView):
 
             # Delete VLAN
             vlan_dn = f"uni/infra/attentp-development_AEP_HPServers/gen-default/rsfuncToEpg-[uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}]"
-            delete_vlan_url = f"https://172.31.1.12/api/node/mo/uni/infra/attentp-development_AEP_HPServers/gen-default/rsfuncToEpg-[uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}].json"
+            delete_vlan_url = f"https://172.31.231.91/api/node/mo/uni/infra/attentp-development_AEP_HPServers/gen-default/rsfuncToEpg-[uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}].json"
             vlan_payload = {
                 "infraRsFuncToEpg": {
                     "attributes": {
@@ -408,7 +416,7 @@ class Contracts(APIView):
                 }
             }
         }
-        contract_creation_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}.json"
+        contract_creation_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}.json"
         contract_response = requests.post(contract_creation_url, headers=cisco_headers, json=contract_payload,
                                           verify=False)
 
@@ -423,7 +431,7 @@ class Contracts(APIView):
                     }
                 }
             }
-            subject_creation_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}.json"
+            subject_creation_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}.json"
             subject_response = requests.post(subject_creation_url, headers=cisco_headers, json=subject_payload,
                                              verify=False)
 
@@ -436,7 +444,7 @@ class Contracts(APIView):
                         }
                     }
                 }
-                subject_filter_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}.json"
+                subject_filter_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}.json"
                 subject_filter_response = requests.post(subject_filter_url, headers=cisco_headers,
                                                         json=subject_filter_payload, verify=False)
 
@@ -551,7 +559,7 @@ class SubjectHandler(APIView):
         sub_name = contract_name.split('-')[1]
         subject_name = f"{base_tenant}-{sub_name}-sub"
 
-        update_subject_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}.json"
+        update_subject_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}.json"
 
         payload = {
             "vzSubj": {
@@ -609,7 +617,7 @@ class SubjectHandler(APIView):
             messages = 'Filter does not exist in this subject'
             return Response({'status': 'error', 'message': messages})
 
-        delete_subject_filter_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}/rssubjFiltAtt-{filter_name}.json"
+        delete_subject_filter_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{contract_name}/subj-{subject_name}/rssubjFiltAtt-{filter_name}.json"
         payload = {
             "vzRsSubjFiltAtt": {
                 "attributes": {
@@ -669,7 +677,7 @@ class Filters(APIView):
         }
 
         # Construct the filter creation URL
-        filter_creation_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}.json"
+        filter_creation_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}.json"
 
         # Make the API request to create the filter
         filter_response = requests.post(filter_creation_url, headers=cisco_headers, json=filter_payload, verify=False)
@@ -692,7 +700,7 @@ class Filters(APIView):
         if not filter_exists(filter_name, base_tenant, cisco_token):
             return Response({'status': 'error', 'message': 'Filter not exists'})
 
-        delete_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}.json"
+        delete_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}.json"
         payload = {
             "vzFilter": {
                 "attributes": {
@@ -762,7 +770,7 @@ class EntryHandler(APIView):
             entry_payload["vzEntry"]["attributes"]["stateful"] = "no"
 
         # Send the request to add the entry
-        entry_creation_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}.json"
+        entry_creation_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}.json"
 
         entry_response = requests.post(entry_creation_url, headers=cisco_headers, json=entry_payload, verify=False)
 
@@ -783,7 +791,7 @@ class EntryHandler(APIView):
         if not entry_id:
             return Response({'status': 'error', 'error': 'Entry ID is required'})
 
-        delete_url = f"https://172.31.1.12/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}/e-{entry_id}.json"
+        delete_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}/e-{entry_id}.json"
         payload = {
             "vzEntry": {
                 "attributes": {
@@ -1259,8 +1267,9 @@ class ColoPolicyGroup(APIView):
         leaf_access_policy_groups = all_policy_groups['leaf_access_policy_groups']
         vpc_policy_groups = all_policy_groups['vpc_policy_groups']
 
-        return Response({'leaf_access_policy_groups': leaf_access_policy_groups, 'vpc_policy_groups': vpc_policy_groups}, status=status.HTTP_200_OK)
-
+        return Response(
+            {'leaf_access_policy_groups': leaf_access_policy_groups, 'vpc_policy_groups': vpc_policy_groups},
+            status=status.HTTP_200_OK)
 
     @method_decorator(token_required)
     def post(self, request):
@@ -1378,6 +1387,56 @@ class ColoPolicyGroup(APIView):
             return Response({'status': 'error', 'message': f"Failed to create Policy Group - {response.text}"})
 
 
+class UpdateVpcPolicyGroup(APIView):
+    @method_decorator(token_required)
+    def post(self, request):
+        cisco_token = get_cisco_token()
+        user = request.user
+        base_tenant = user.get('tenant_list')[0]
+
+        vpc_policy_group = request.data.get('vpc_policy_group_name')
+        port_channel_policy = request.data.get('port_channel_policy')
+
+        if not vpc_policy_group or not port_channel_policy:
+            return Response({
+                'success': False,
+                'message': 'Missing required fields: vpc_policy_group_name or port_channel_policy'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        allowed_policies = ['Static', 'LACP_Active']
+
+        if port_channel_policy not in allowed_policies:
+            return Response({
+                'success': False,
+                'message': f"Invalid port_channel_policy '{port_channel_policy}'. Only 'Static' and 'LACP_Active' are allowed."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+
+        vpc_data = {
+            "infraRsLacpPol": {
+                "attributes": {
+                    "tnLacpLagPolName": port_channel_policy
+                },
+                "children": []
+            }
+        }
+
+        vpc_url = f"https://172.31.231.91/api/node/mo/uni/infra/funcprof/accbundle-{vpc_policy_group}/rslacpPol.json"
+        response = requests.post(vpc_url, json=vpc_data, headers=headers, verify=False)
+
+        if response.status_code == 200:
+            return Response({
+                'success': True,
+                'message': f"VPC Policy Group {vpc_policy_group} updated successfully"
+            })
+        else:
+            return Response({
+                'success': False,
+                'message': f"Failed to update VPC Policy Group - {response.text}"
+            }, status=response.status_code)
+
+
 ##################################################
 ############### COLO ACCESS PORT #################
 ##################################################
@@ -1396,7 +1455,8 @@ class ColoAccessPort(APIView):
                 node_details = get_node_details(cisco_headers, node_id, base_tenant)
                 return Response({'success': True, 'data': node_details}, status=status.HTTP_200_OK)
             except Exception as e:
-                return Response({'error': f'Unable to fetch details for node {node_id}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({'error': f'Unable to fetch details for node {node_id}'},
+                                status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Fetch Interface Details
         elif request.path.startswith('/colo_access_port/fetch-interface-details/') and profile_name:
@@ -1410,7 +1470,7 @@ class ColoAccessPort(APIView):
                 for part in parts:
                     if part.startswith('Node-'):
                         try:
-                            node_number = int(part[len('Node-'):])
+                            node_number = int(part.replace('Node-', '').replace('-IntProf', ''))
                             node_profile = f"Node-{node_number}-IntProf"
                             profile_names.append(node_profile)
                         except ValueError:
@@ -1439,5 +1499,883 @@ class ColoAccessPort(APIView):
 
             except Exception as e:
                 return Response({'error': 'Unable to fetch data.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        cisco_token = get_cisco_token()
+        user = request.user
+        base_tenant = user.get('tenant_list')[0]
+        profile_type = request.data.get('profile_type')
+        print(profile_type)
+
+        if not request.data:
+            return Response({'status': 'error', 'message': 'Request body is empty.'})
+
+        if profile_type == 'Individual':
+            leaf_access_policy_groups = request.data.get('leaf_access_policy_groups')
+            leaf_profile = request.data.get('leaf_profile')
+
+            leaf_profile_name_individual = ''
+            details = ''
+
+            if leaf_profile and leaf_profile.startswith('node-'):
+                details = leaf_profile[len('node-'):]
+                leaf_profile_name_individual = f"Node-{details}-IntProf"
+
+            interface_id = request.data.get('interface_id')
+
+            print(leaf_profile, leaf_access_policy_groups, interface_id)
+            port_id = ''
+            if interface_id and interface_id.startswith('eth1/'):
+                port_id = interface_id[len('eth1/'):]
+
+            profile_name = f"IntSel_1_{port_id}"
+
+            url = f"https://172.31.231.91/api/node/mo/uni/infra/accportprof-{leaf_profile_name_individual}/hports-{profile_name}-typ-range.json"
+            headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+            payload = {
+                "infraHPortS": {
+                    "attributes": {
+                        "dn": f"uni/infra/accportprof-{leaf_profile_name_individual}/hports-{profile_name}-typ-range",
+                        "name": profile_name,
+                        "descr": base_tenant,
+                        "rn": f"hports-{profile_name}-typ-range",
+                        "status": "created,modified"
+                    },
+                    "children": [
+                        {
+                            "infraPortBlk": {
+                                "attributes": {
+                                    "dn": f"uni/infra/accportprof-{leaf_profile_name_individual}/hports-{profile_name}-typ-range/portblk-block3",
+                                    "fromPort": port_id,
+                                    "toPort": port_id,
+                                    "name": "block3",
+                                    "rn": "portblk-block3",
+                                    "status": "created,modified"
+                                },
+                                "children": []
+                            }
+                        },
+                        {
+                            "infraRsAccBaseGrp": {
+                                "attributes": {
+                                    "tDn": f"uni/infra/funcprof/accportgrp-{leaf_access_policy_groups}",
+                                    "status": "created,modified"
+                                },
+                                "children": []
+                            }
+                        }
+                    ]
+                }
+            }
+
+            # 1. Check if port already used in this profile
+            check_url = f"https://172.31.231.91/api/node/mo/uni/infra/accportprof-{leaf_profile_name_individual}.json?query-target=children&target-subtree-class=infraHPortS"
+            check_resp = requests.get(check_url, headers=headers, verify=False)
+
+            if check_resp.status_code == 200:
+                existing_entries = check_resp.json().get("imdata", [])
+                for entry in existing_entries:
+                    hports = entry.get("infraHPortS", {})
+                    name = hports.get("attributes", {}).get("name", "")
+                    if name.endswith(f"_{port_id}"):
+                        return Response({
+                            'success': False,
+                            'message': f"Port eth1/{port_id} already exists in profile {leaf_profile_name_individual}. Overlapping not allowed."
+                        }, status=status.HTTP_409_CONFLICT)
+
+            response = requests.post(url, json=payload, headers=headers, verify=False)
+
+            if response and response.status_code == 200:
+                return Response({'success': True, 'message': "Individual Access Port created successfully"})
+            else:
+                return Response(
+                    {'success': False, 'message': f"Failed to create Individual Access Port - {response.text}"})
+
+        elif profile_type == 'Bond':
+            vpc_policy_groups = request.data.get('vpc_policy_groups')
+            leaf_profile1 = request.data.get('leaf_profile1')
+            leaf_profile2 = request.data.get('leaf_profile2')
+
+            cisco_headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+
+            if is_policy_group_already_used(cisco_headers, vpc_policy_groups):
+                return Response({'success': False, 'message': f"Policy group '{vpc_policy_groups}' is already in use."})
+
+            leaf_profile_name_bond = ''
+            details1 = ''
+
+            if leaf_profile1 and leaf_profile1.startswith('node-') and leaf_profile2 and leaf_profile2.startswith(
+                    'node-'):
+                details1 = leaf_profile1[len('node-'):]
+                details2 = leaf_profile2[len('node-'):]
+                leaf_profile_name_bond = f"Node-{details1}_Node-{details2}-IntProf"
+
+            bond_interface_id = request.data.get('bond_interface_id')
+            print(leaf_profile_name_bond, leaf_profile1, leaf_profile2, bond_interface_id)
+            port_id = ''
+            if bond_interface_id and bond_interface_id.startswith('eth1/'):
+                port_id = bond_interface_id[len('eth1/'):]
+
+            profile_name = f"IntSel_1_{port_id}"
+
+            url = f"https://172.31.231.91/api/node/mo/uni/infra/accportprof-{leaf_profile_name_bond}/hports-{profile_name}-typ-range.json"
+            headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+            payload = {
+                "infraHPortS": {
+                    "attributes": {
+                        "dn": f"uni/infra/accportprof-{leaf_profile_name_bond}/hports-{profile_name}-typ-range",
+                        "name": profile_name,
+                        "descr": base_tenant,
+                        "rn": f"hports-{profile_name}-typ-range",
+                        "status": "created,modified"
+                    },
+                    "children": [
+                        {
+                            "infraPortBlk": {
+                                "attributes": {
+                                    "dn": f"uni/infra/accportprof-{leaf_profile_name_bond}/hports-{profile_name}-typ-range/portblk-block3",
+                                    "fromPort": port_id,
+                                    "toPort": port_id,
+                                    "name": "block3",
+                                    "rn": "portblk-block3",
+                                    "status": "created,modified"
+                                },
+                                "children": []
+                            }
+                        },
+                        {
+                            "infraRsAccBaseGrp": {
+                                "attributes": {
+                                    "tDn": f"uni/infra/funcprof/accbundle-{vpc_policy_groups}",
+                                    "status": "created,modified"
+                                },
+                                "children": []
+                            }
+                        }
+                    ]
+                }
+            }
+
+            check_url = f"https://172.31.231.91/api/node/mo/uni/infra/accportprof-{leaf_profile_name_bond}.json?query-target=children&target-subtree-class=infraHPortS"
+            check_resp = requests.get(check_url, headers=headers, verify=False)
+
+            if check_resp.status_code == 200:
+                existing_entries = check_resp.json().get("imdata", [])
+                for entry in existing_entries:
+                    hports = entry.get("infraHPortS", {})
+                    name = hports.get("attributes", {}).get("name", "")
+                    if name.endswith(f"_{port_id}"):
+                        return Response({
+                            'success': False,
+                            'message': f"Port eth1/{port_id} already exists in bonded profile {leaf_profile_name_bond}."
+                        }, status=status.HTTP_409_CONFLICT)
+
+            response = requests.post(url, json=payload, headers=headers, verify=False)
+            if response and response.status_code == 200:
+                return Response({'success': True, 'message': "Access Port created successfully"})
+            else:
+                return Response({'success': False, 'message': f"Failed to create Access Port - {response.text}"})
+
+        else:
+            return Response({'success': False, 'message': "Invalid profile type"}, status=status.HTTP_400_BAD_REQUEST)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        cisco_token = get_cisco_token()
+        user = request.user
+        base_tenant = user.get('tenant_list')[0]
+
+        profile = request.data.get('profile')
+        interface_name = request.data.get('interface_name')
+
+        if not profile or not interface_name:
+            return Response({
+                'success': False,
+                'message': 'Missing required fields: profile or interface_name'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        profile_name = f"{profile}-IntProf"
+
+        headers = {
+            "Cookie": f"APIC-cookie={cisco_token}",
+            "Content-Type": "application/json"
+        }
+
+        delete_url = f"https://172.31.231.91/api/node/mo/uni/infra/accportprof-{profile_name}/hports-{interface_name}-typ-range.json"
+
+        payload = {
+            "infraHPortS": {
+                "attributes": {
+                    "dn": f"uni/infra/accportprof-{profile_name}/hports-{interface_name}-typ-range",
+                    "status": "deleted"
+                },
+                "children": []
+            }
+        }
+
+        try:
+            delete_response = requests.delete(delete_url, headers=headers, json=payload, verify=False)
+
+            if delete_response.status_code == 200:
+                return Response({'success': True, 'message': f"Interface selector delete successfully."})
+            else:
+                return Response({
+                    'success': False,
+                    'message': f"Failed to delete interface selector. Status code: {delete_response.status_code}",
+                    'details': delete_response.text
+                }, status=delete_response.status_code)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f"Exception occurred while deleting interface: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+##################################################
+############### COLO STATIC EPG ##################
+##################################################
+
+class ColoStaticEpgView(APIView):
+    @method_decorator(token_required)
+    def get(self, request, action=None, ap_name=None):
+        user = request.user
+        cisco_token = get_cisco_token()
+        base_tenant = user.get('tenant_list')[0]
+        cisco_headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+
+        # Case 1: /deploy_static_epg/fetch-epgs/<ap_name>/
+        if request.path.startswith('/deploy_static_epg/fetch-epgs/') and ap_name:
+            try:
+                epg_list = colo_epg_list(cisco_headers, ap_name, base_tenant)
+                return Response({'success': True, 'data': epg_list}, status=status.HTTP_200_OK)
+            except Exception as e:
+                return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Case 2: /deploy_static_epg/fetch-epg-details/<ap_name>/
+        elif request.path.startswith('/deploy_static_epg/fetch-epg-details/') and ap_name:
+            epg_table_data = []
+            try:
+                epg_list_url = (
+                    f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}.json"
+                    f"?query-target=subtree&target-subtree-class=fvAEPg"
+                )
+                epg_list_response = requests.get(epg_list_url, headers=cisco_headers, verify=False)
+                if epg_list_response.status_code == 200:
+                    epg_list_data = epg_list_response.json().get('imdata', [])
+                    for epg_entry in epg_list_data:
+                        epg_name = epg_entry.get('fvAEPg', {}).get('attributes', {}).get('name')
+                        if epg_name:
+                            epg_details_url = (
+                                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}.json"
+                                f"?query-target=subtree&target-subtree-class=fvRsPathAtt"
+                            )
+                            epg_response = requests.get(epg_details_url, headers=cisco_headers, verify=False)
+                            if epg_response.status_code == 200:
+                                epg_data = epg_response.json().get('imdata', [])
+                                found_path = False
+                                for epg in epg_data:
+                                    attr = epg['fvRsPathAtt']['attributes']
+                                    dn = attr.get('dn')
+                                    tDn = attr.get('tDn')
+                                    encap = attr.get('encap')
+                                    if dn and tDn:
+                                        path = (
+                                            tDn.replace("topology/", "")
+                                            .replace("pathep-", "")
+                                            .replace("paths-", "Node-")
+                                            .replace("[", "")
+                                            .replace("]", "")
+                                            .replace("pod-", "Pod-")
+                                        )
+                                        epg_table_data.append({
+                                            "ap_name": ap_name,
+                                            "epg_name": epg_name,
+                                            "modified_string": path,
+                                            "encap": encap,
+                                            "path": tDn
+                                        })
+                                        found_path = True
+                                if not found_path:
+                                    epg_table_data.append({
+                                        "ap_name": ap_name,
+                                        "epg_name": epg_name,
+                                        "modified_string": "",
+                                        "encap": "",
+                                        "path": ""
+                                    })
+                return Response({'success': True, 'data': epg_table_data}, status=200)
+            except Exception as e:
+                return Response({'success': False, 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Case 3: Default - return base metadata
+        else:
+            try:
+                all_policy_groups = get_all_policy_groups(cisco_headers, base_tenant)
+                all_node_ids = get_leaf_node_ids(cisco_headers)
+                colo_ap_list = get_ap_list(cisco_headers, base_tenant)
+
+                return Response({
+                    'success': True,
+                    'ap_list': colo_ap_list,
+                    'all_node_list': all_node_ids,
+                    'all_policy_groups': all_policy_groups
+                }, status=status.HTTP_200_OK)
+
+            except Exception:
+                return Response({'success': False, 'message': 'Unable to fetch metadata.'}, status=500)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            profile_type = request.data.get('profile_type')
+            cisco_headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+            # 1. Individual Deployment
+            if profile_type == "Individual":
+                ap_name = request.data.get('ap_name_individual')
+                epg_name = request.data.get('epg_name_individual')
+                interface_id = request.data.get('interface_id')
+                mode = request.data.get('mode_individual')
+                leaf_profile = request.data.get('leaf_profile')
+                node_id = leaf_profile.split('-')[-1]
+
+                aep_name = get_aep_name_for_epg(cisco_headers, base_tenant, ap_name, epg_name)
+                if not aep_name:
+                    return Response({'success': False, 'message': 'Unable to determine AEP for the EPG'}, status=400)
+
+                vlan_details = get_vlan_epg_details(cisco_headers, aep_name)
+                vlan_encap = next((epg['encap'] for epg in vlan_details if epg['epg_name'] == epg_name), None)
+
+                if not vlan_encap:
+                    return Response({'success': False, 'message': 'VLAN for the EPG not found'}, status=400)
+
+                payload = {
+                    "fvRsPathAtt": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rspathAtt-[topology/pod-1/paths-{node_id}/pathep-[{interface_id}]]",
+                            "encap": vlan_encap,
+                            "mode": mode,
+                            "tDn": f"topology/pod-1/paths-{node_id}/pathep-[{interface_id}]",
+                            "rn": f"rspathAtt-[topology/pod-1/paths-{node_id}/pathep-[{interface_id}]]",
+                            "status": "created"
+                        },
+                        "children": []
+                    }
+                }
+
+                url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rspathAtt-[topology/pod-1/paths-{node_id}/pathep-[{interface_id}]].json"
+
+                response = requests.post(url, json=payload, headers=cisco_headers, verify=False)
+
+                if response.status_code == 200:
+                    return Response({'success': True, 'message': "Deployed Port static EPG successfully"})
+                else:
+                    return Response(
+                        {'success': False, 'message': f"Failed to deploy Port static EPG - {response.text}"},
+                        status=500)
+
+            # 2. Bond Deployment
+            elif profile_type == "Bond":
+                ap_name = request.data.get('ap_name_bond')
+                epg_name = request.data.get('epg_name_bond')
+                mode = request.data.get('mode_bond')
+                vpc_group = request.data.get('vpc_policy_groups')
+                node_id1 = request.data.get('leaf_profile1').split('-')[-1]
+                node_id2 = request.data.get('leaf_profile2').split('-')[-1]
+                node_bond = f"{node_id1}-{node_id2}"
+
+                aep_name = get_aep_name_for_epg(cisco_headers, base_tenant, ap_name, epg_name)
+                if not aep_name:
+                    return Response({'success': False, 'message': 'Unable to determine AEP for the EPG'}, status=400)
+
+                vlan_details = get_vlan_epg_details(cisco_headers, aep_name)
+                vlan_encap = next((epg['encap'] for epg in vlan_details if epg['epg_name'] == epg_name), None)
+
+                if not vlan_encap:
+                    return Response({'success': False, 'message': 'VLAN for the EPG not found'}, status=400)
+
+                payload = {
+                    "fvRsPathAtt": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rspathAtt-[topology/pod-1/protpaths-{node_bond}/pathep-[{vpc_group}]]",
+                            "encap": vlan_encap,
+                            "mode": mode,
+                            "tDn": f"topology/pod-1/protpaths-{node_bond}/pathep-[{vpc_group}]",
+                            "rn": f"rspathAtt-[topology/pod-1/protpaths-{node_bond}/pathep-[{vpc_group}]]",
+                            "status": "created"
+                        },
+                        "children": []
+                    }
+                }
+
+                url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rspathAtt-[topology/pod-1/protpaths-{node_bond}/pathep-[{vpc_group}]].json"
+                headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+                response = requests.post(url, json=payload, headers=cisco_headers, verify=False)
+
+                if response.status_code == 200:
+                    return Response({'success': True, 'message': "Deployed Bond static EPG successfully"})
+                else:
+                    return Response(
+                        {'success': False, 'message': f"Failed to deploy Bond static EPG - {response.text}"},
+                        status=500)
+
+            # 4. Fallback
+            return Response({'success': False, 'message': 'Invalid profile type or missing data'}, status=400)
+
+        except Exception as e:
+            return Response({'success': False, 'message': f'An error occurred: {str(e)}'}, status=500)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        cisco_token = get_cisco_token()
+        user = request.user
+        base_tenant = user.get('tenant_list')[0]
+
+        ap_name = request.data.get('ap_name')
+        epg_name = request.data.get('epg_name')
+        path = request.data.get('path')
+
+        headers = {
+            "Cookie": f"APIC-cookie={cisco_token}",
+            "Content-Type": "application/json"
+        }
+
+        delete_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rspathAtt-[{path}].json"
+        payload = {
+            "fvRsPathAtt": {
+                "attributes": {
+                    "dn": f"uni/tn-{base_tenant}/ap-{ap_name}/epg-{epg_name}/rspathAtt-[{path}]",
+                    "status": "deleted"
+                },
+                "children": []
+            }
+        }
+
+        try:
+            delete_response = requests.delete(delete_url, headers=headers, json=payload, verify=False)
+
+            if delete_response.status_code == 200:
+                return Response({'success': True, 'message': f"Static EPG removed successfully."})
+            else:
+                return Response({
+                    'success': False,
+                    'message': f"Failed to remove static epg. Status code: {delete_response.status_code}",
+                    'details': delete_response.text
+                }, status=delete_response.status_code)
+
+        except Exception as e:
+            return Response({
+                'success': False,
+                'message': f"Exception occurred while removing static epg: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+##################################################
+################### L3 OUT #######################
+##################################################
+
+
+class L3OutView(APIView):
+    @method_decorator(token_required)
+    def get(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            cisco_headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            l3_out_data = l3_out_list(cisco_headers, base_tenant)
+            vrf_data = get_vrf_list(cisco_headers, base_tenant)
+
+            return Response({
+                'vrf_list': vrf_data,
+                'l3_out_data': l3_out_data,
+            }, status=status.HTTP_200_OK)
+
+        except Exception:
+            return Response({'success': False, 'message': 'Unable to fetch metadata.'}, status=500)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            cisco_headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            profile_name = request.data.get('profile_name')
+            subnet_ip = request.data.get('subnet_ip')
+            vrf_name = request.data.get('vrf')
+            l3_domain = f"{base_tenant}-L3Domain"
+
+            l3out_name = f"{base_tenant}-{profile_name}-l3out"
+            external_epg_name = f"{base_tenant}-{profile_name}-extepg"
+            filter_name = f"{base_tenant}-{profile_name}-l3out-ext-flt"
+            entry_name = f"{base_tenant}-{profile_name}-l3out-ext-entry"
+            provider_contract_name = f"{base_tenant}-{profile_name}-l3out-ext-con-out"
+            provider_subject_name = f"{base_tenant}-{profile_name}-l3out-ext-sub-out"
+            consumer_contract_name = f"{base_tenant}-{profile_name}-l3out-ext-con-in"
+            consumer_subject_name = f"{base_tenant}-{profile_name}-l3out-ext-sub-in"
+
+            existing_l3_profiles = l3_out_list(cisco_headers, base_tenant)
+
+            if any(profile["l3_out_name"] == l3out_name for profile in existing_l3_profiles) or \
+               filter_exists(filter_name, base_tenant, cisco_token) or \
+               contract_exists(provider_contract_name, base_tenant, cisco_token) or \
+               subject_exists(provider_subject_name, base_tenant, provider_contract_name, cisco_token):
+                return Response({
+                    'status': 'error',
+                    'message': "L3 Out profile or its associated components already exists."
+                })
+
+            create_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}.json"
+            payload = {
+                "l3extOut": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}",
+                        "name": l3out_name,
+                        "rn": f"out-{l3out_name}",
+                        "status": "created,modified"
+                    },
+                    "children": [
+                        {
+                            "l3extRsEctx": {
+                                "attributes": {
+                                    "tnFvCtxName": vrf_name,
+                                    "status": "created,modified"
+                                },
+                                "children": []
+                            }
+                        },
+                        {
+                            "l3extRsL3DomAtt": {
+                                "attributes": {
+                                    "tDn": f"uni/l3dom-{l3_domain}",
+                                    "status": "created,modified"
+                                },
+                                "children": []
+                            }
+                        }
+                    ]
+                }
+            }
+
+            response = requests.post(create_url, headers=cisco_headers, json=payload, verify=False)
+            if response.status_code != 200:
+                return Response({'status': 'error', 'error': response.text})
+
+            external_epg_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/instP-{external_epg_name}.json"
+            external_epg_payload = {
+                "l3extInstP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/instP-{external_epg_name}",
+                        "name": external_epg_name,
+                        "rn": f"instP-{external_epg_name}",
+                        "status": "created"
+                    },
+                    "children": [
+                        {
+                            "l3extSubnet": {
+                                "attributes": {
+                                    "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/instP-{external_epg_name}/extsubnet-[{subnet_ip}]",
+                                    "ip": subnet_ip,
+                                    "scope": "import-security",
+                                    "aggregate": "",
+                                    "rn": f"extsubnet-[{subnet_ip}]",
+                                    "status": "created"
+                                },
+                                "children": []
+                            }
+                        }
+                    ]
+                }
+            }
+
+            response = requests.post(external_epg_url, headers=cisco_headers, json=external_epg_payload, verify=False)
+            if response.status_code != 200:
+                return Response({'status': 'error', 'error': response.text})
+
+            filter_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/flt-{filter_name}.json"
+            filter_payload = {
+                "vzFilter": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/flt-{filter_name}",
+                        "name": filter_name,
+                        "rn": f"flt-{filter_name}",
+                        "status": "created,modified"
+                    },
+                    "children": [
+                        {
+                            "vzEntry": {
+                                "attributes": {
+                                    "dn": f"uni/tn-{base_tenant}/flt-{filter_name}/e-{entry_name}",
+                                    "name": entry_name,
+                                    "etherT": "ip",
+                                    "prot": "tcp",
+                                    "rn": f"e-{entry_name}",
+                                    "status": "created,modified"
+                                },
+                                "children": []
+                            }
+                        }
+                    ]
+                }
+            }
+
+            response = requests.post(filter_url, headers=cisco_headers, json=filter_payload, verify=False)
+            if response.status_code != 200:
+                return Response({'status': 'error', 'error': response.text})
+
+            # Provider contract creation
+            provider_contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{provider_contract_name}.json"
+            provider_contract_payload = {
+                "vzBrCP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/brc-{provider_contract_name}",
+                        "name": provider_contract_name,
+                        "rn": f"brc-{provider_contract_name}",
+                        "status": "created"
+                    },
+                    "children": [
+                        {
+                            "vzSubj": {
+                                "attributes": {
+                                    "dn": f"uni/tn-{base_tenant}/brc-{provider_contract_name}/subj-{provider_subject_name}",
+                                    "name": provider_subject_name,
+                                    "rn": f"subj-{provider_subject_name}",
+                                    "status": "created"
+                                },
+                                "children": [
+                                    {
+                                        "vzRsSubjFiltAtt": {
+                                            "attributes": {
+                                                "status": "created,modified",
+                                                "tnVzFilterName": filter_name,
+                                                "directives": ""
+                                            },
+                                            "children": []
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+
+            response = requests.post(provider_contract_url, headers=cisco_headers, json=provider_contract_payload, verify=False)
+            if response.status_code != 200:
+                return Response({'status': 'error', 'error': response.text})
+
+            # Consumer contract creation
+            consumer_contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{consumer_contract_name}.json"
+            consumer_contract_payload = {
+                "vzBrCP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/brc-{consumer_contract_name}",
+                        "name": consumer_contract_name,
+                        "rn": f"brc-{consumer_contract_name}",
+                        "status": "created"
+                    },
+                    "children": [
+                        {
+                            "vzSubj": {
+                                "attributes": {
+                                    "dn": f"uni/tn-{base_tenant}/brc-{consumer_contract_name}/subj-{consumer_subject_name}",
+                                    "name": consumer_subject_name,
+                                    "rn": f"subj-{consumer_subject_name}",
+                                    "status": "created"
+                                },
+                                "children": [
+                                    {
+                                        "vzRsSubjFiltAtt": {
+                                            "attributes": {
+                                                "status": "created,modified",
+                                                "tnVzFilterName": filter_name,
+                                                "directives": ""
+                                            },
+                                            "children": []
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+
+            response = requests.post(consumer_contract_url, headers=cisco_headers, json=consumer_contract_payload, verify=False)
+            if response.status_code != 200:
+                return Response({'status': 'error', 'error': response.text})
+
+            # Map contracts to external EPG
+            for contract_type, contract_name in [("fvRsProv", provider_contract_name), ("fvRsCons", consumer_contract_name)]:
+                contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/instP-{external_epg_name}.json"
+                contract_payload = {
+                    contract_type: {
+                        "attributes": {
+                            "tnVzBrCPName": contract_name,
+                            "status": "created,modified"
+                        },
+                        "children": []
+                    }
+                }
+                response = requests.post(contract_url, headers=cisco_headers, json=contract_payload, verify=False)
+                if response.status_code != 200:
+                    return Response({'status': 'error', 'error': response.text})
+
+            # Map contracts to VRF
+            for contract_type, contract_name in [("vzRsAnyToCons", provider_contract_name), ("vzRsAnyToProv", consumer_contract_name)]:
+                vrf_mapping_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ctx-{vrf_name}/any.json"
+                vrf_mapping_payload = {
+                    contract_type: {
+                        "attributes": {
+                            "tnVzBrCPName": contract_name,
+                            "status": "created"
+                        },
+                        "children": []
+                    }
+                }
+                response = requests.post(vrf_mapping_url, headers=cisco_headers, json=vrf_mapping_payload, verify=False)
+                if response.status_code != 200:
+                    return Response({'status': 'error', 'error': response.text})
+
+            return Response({'status': 'success', 'message': f"L3 Out profile created successfully."})
+
+        except Exception as e:
+            return Response({'status': 'error', 'error': str(e)})
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            profile_name = request.data.get('profile_name')
+            vrf_name = request.data.get('vrf_name')
+
+            if not profile_name:
+                return Response({'success': False, 'error': 'L3 Out Name is required'}, status=400)
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            delete_l3out_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{profile_name}.json"
+            delete_l3out_payload = {
+                "l3extOut": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{profile_name}",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            delete_provider_contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{profile_name}-ext-con-out.json"
+            delete_provider_contract_payload = {
+                "vzBrCP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/brc-{profile_name}-ext-con-out",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            delete_consumer_contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/brc-{profile_name}-ext-con-in.json"
+            delete_consumer_contract_payload = {
+                "vzBrCP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/brc-{profile_name}-ext-con-in",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            delete_filter_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/flt-{profile_name}-ext-flt.json"
+            delete_filter_payload = {
+                "vzFilter": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/flt-{profile_name}-ext-flt",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            delete_provider_vrf_contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ctx-{vrf_name}/any/rsanyToProv-{profile_name}-ext-con-in.json"
+            delete_provider_vrf_contract_payload = {
+                "vzRsAnyToProv": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/ctx-{vrf_name}/any/rsanyToProv-{profile_name}-ext-con-in",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            delete_consumer_vrf_contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ctx-{vrf_name}/any/rsanyToCons-{profile_name}-ext-con-out.json"
+            delete_consumer_vrf_contract_payload = {
+                "vzRsAnyToCons": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/ctx-{vrf_name}/any/rsanyToCons-{profile_name}-ext-con-out",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            delete_l3out_response = requests.delete(delete_l3out_url, json=delete_l3out_payload, verify=False, headers=headers)
+            delete_provider_contract_response = requests.delete(delete_provider_contract_url, json=delete_provider_contract_payload, verify=False, headers=headers)
+            delete_consumer_contract_response = requests.delete(delete_consumer_contract_url, json=delete_consumer_contract_payload, verify=False, headers=headers)
+            delete_filter_response = requests.delete(delete_filter_url, json=delete_filter_payload, verify=False, headers=headers)
+            delete_provider_vrf_contract_response = requests.delete(delete_provider_vrf_contract_url, json=delete_provider_vrf_contract_payload, verify=False, headers=headers)
+            delete_consumer_vrf_contract_response = requests.delete(delete_consumer_vrf_contract_url, json=delete_consumer_vrf_contract_payload, verify=False, headers=headers)
+
+            if (
+                delete_l3out_response.status_code == 200 and
+                delete_provider_contract_response.status_code == 200 and
+                delete_consumer_contract_response.status_code == 200 and
+                delete_filter_response.status_code == 200 and
+                delete_provider_vrf_contract_response.status_code == 200 and
+                delete_consumer_vrf_contract_response.status_code == 200
+            ):
+                return Response({'status': 'success','message': f'L3Out Deleted Successfully'})
+            else:
+                return Response({
+                    'status': 'error',
+                    'message': 'Failed to delete one or more resources',
+                    'details': {
+                        'delete_l3out': delete_l3out_response.status_code,
+                        'delete_provider_contract': delete_provider_contract_response.status_code,
+                        'delete_consumer_contract': delete_consumer_contract_response.status_code,
+                        'delete_filter': delete_filter_response.status_code,
+                        'delete_provider_vrf_contract': delete_provider_vrf_contract_response.status_code,
+                        'delete_consumer_vrf_contract': delete_consumer_vrf_contract_response.status_code,
+                    }
+                }, status=500)
+
+        except Exception as e:
+            return Response({'status': 'error', 'message': str(e)}, status=500)
+
+
+
+
 
 

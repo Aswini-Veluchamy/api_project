@@ -76,7 +76,7 @@ def get_cisco_token():
         "aaaUser": {
             "attributes": {
                 "name": "api_admin",
-                "pwd": "api_login#1234"
+                "pwd": "Admin#1234"
             }
         }
     }

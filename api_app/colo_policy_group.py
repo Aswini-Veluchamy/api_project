@@ -5,8 +5,8 @@ import requests
 
 def get_all_policy_groups(cisco_headers, base_tenant):
     # URLs to fetch leaf_access and vpc policy groups
-    leaf_access_url = f"{CISCO_BASE_ROUTE_URL}/node/class/infraAccPortGrp.json"
-    vpc_url = f"{CISCO_BASE_ROUTE_URL}/node/class/infraAccBndlGrp.json"
+    leaf_access_url = f"https://172.31.231.91/api/node/class/infraAccPortGrp.json"
+    vpc_url = f"https://172.31.231.91/api/node/mo/uni/infra/funcprof.json?query-target=subtree&target-subtree-class=infraAccBndlGrp&rsp-subtree=children&rsp-subtree-class=infraRsLacpPol"
 
     # Retrieve leaf_access Policy Groups data
     leaf_access_response = requests.get(leaf_access_url, headers=cisco_headers, verify=False)
@@ -40,12 +40,21 @@ def get_all_policy_groups(cisco_headers, base_tenant):
             name = group_attrs.get("name")
             descr = group_attrs.get("descr")
             dn = group_attrs.get("dn")
+            tnLacpLagPolName = "No LACP Policy"  # Default value
+
+            children = group.get("infraAccBndlGrp", {}).get("children", [])
+            for child in children:
+                infraRsLacpPol = child.get("infraRsLacpPol", {}).get("attributes", {})
+                # Update tnLacpLagPolName if present in child
+                tnLacpLagPolName = infraRsLacpPol.get("tnLacpLagPolName", tnLacpLagPolName)
             if base_tenant in name:
                 vpc_policy_groups.append({
                     "name": name,
                     "descr": descr,
-                    "dn": dn
+                    "dn": dn,
+                    "tnLacpLagPolName": tnLacpLagPolName
             })
+        print(vpc_policy_groups)
 
     # Return both leaf_access and vpc policy groups
     return {
