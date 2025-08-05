@@ -9,8 +9,10 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 #AUTHENTICATION
+
 from .config import CISCO_BASE_ROUTE_URL, NEUTRON_BASE_URL
 from .utils import user_login, token_required, get_cisco_token
+
 #ZONE
 from .zone_data import vrf_list, ap_list
 #NETWORK
@@ -39,7 +41,8 @@ from .colo_access_port import get_policy_groups, is_policy_group_already_used
 from .deploy_static_epg import colo_epg_list, get_epg_interfaces, get_vlan_epg_details, get_ap_list, \
     get_aep_name_for_epg
 #L3OUT
-from .l3out import l3_out_list, get_vrf_list
+from .l3out import l3_out_list, get_vrf_list, get_node_profiles
+from .l3out import get_interface_profiles, get_l3out_leaf_profiles, get_fabric_path_eps, l3out_vlan_pool_check
 
 
 ############################################
@@ -1974,6 +1977,7 @@ class ColoStaticEpgView(APIView):
                 'message': f"Exception occurred while removing static epg: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 ##################################################
 ################### L3 OUT #######################
 ##################################################
@@ -2032,9 +2036,9 @@ class L3OutView(APIView):
             existing_l3_profiles = l3_out_list(cisco_headers, base_tenant)
 
             if any(profile["l3_out_name"] == l3out_name for profile in existing_l3_profiles) or \
-               filter_exists(filter_name, base_tenant, cisco_token) or \
-               contract_exists(provider_contract_name, base_tenant, cisco_token) or \
-               subject_exists(provider_subject_name, base_tenant, provider_contract_name, cisco_token):
+                    filter_exists(filter_name, base_tenant, cisco_token) or \
+                    contract_exists(provider_contract_name, base_tenant, cisco_token) or \
+                    subject_exists(provider_subject_name, base_tenant, provider_contract_name, cisco_token):
                 return Response({
                     'status': 'error',
                     'message': "L3 Out profile or its associated components already exists."
@@ -2175,7 +2179,8 @@ class L3OutView(APIView):
                 }
             }
 
-            response = requests.post(provider_contract_url, headers=cisco_headers, json=provider_contract_payload, verify=False)
+            response = requests.post(provider_contract_url, headers=cisco_headers, json=provider_contract_payload,
+                                     verify=False)
             if response.status_code != 200:
                 return Response({'status': 'error', 'error': response.text})
 
@@ -2216,12 +2221,14 @@ class L3OutView(APIView):
                 }
             }
 
-            response = requests.post(consumer_contract_url, headers=cisco_headers, json=consumer_contract_payload, verify=False)
+            response = requests.post(consumer_contract_url, headers=cisco_headers, json=consumer_contract_payload,
+                                     verify=False)
             if response.status_code != 200:
                 return Response({'status': 'error', 'error': response.text})
 
             # Map contracts to external EPG
-            for contract_type, contract_name in [("fvRsProv", provider_contract_name), ("fvRsCons", consumer_contract_name)]:
+            for contract_type, contract_name in [("fvRsProv", provider_contract_name),
+                                                 ("fvRsCons", consumer_contract_name)]:
                 contract_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/instP-{external_epg_name}.json"
                 contract_payload = {
                     contract_type: {
@@ -2237,7 +2244,8 @@ class L3OutView(APIView):
                     return Response({'status': 'error', 'error': response.text})
 
             # Map contracts to VRF
-            for contract_type, contract_name in [("vzRsAnyToCons", provider_contract_name), ("vzRsAnyToProv", consumer_contract_name)]:
+            for contract_type, contract_name in [("vzRsAnyToCons", provider_contract_name),
+                                                 ("vzRsAnyToProv", consumer_contract_name)]:
                 vrf_mapping_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/ctx-{vrf_name}/any.json"
                 vrf_mapping_payload = {
                     contract_type: {
@@ -2341,22 +2349,32 @@ class L3OutView(APIView):
                 }
             }
 
-            delete_l3out_response = requests.delete(delete_l3out_url, json=delete_l3out_payload, verify=False, headers=headers)
-            delete_provider_contract_response = requests.delete(delete_provider_contract_url, json=delete_provider_contract_payload, verify=False, headers=headers)
-            delete_consumer_contract_response = requests.delete(delete_consumer_contract_url, json=delete_consumer_contract_payload, verify=False, headers=headers)
-            delete_filter_response = requests.delete(delete_filter_url, json=delete_filter_payload, verify=False, headers=headers)
-            delete_provider_vrf_contract_response = requests.delete(delete_provider_vrf_contract_url, json=delete_provider_vrf_contract_payload, verify=False, headers=headers)
-            delete_consumer_vrf_contract_response = requests.delete(delete_consumer_vrf_contract_url, json=delete_consumer_vrf_contract_payload, verify=False, headers=headers)
+            delete_l3out_response = requests.delete(delete_l3out_url, json=delete_l3out_payload, verify=False,
+                                                    headers=headers)
+            delete_provider_contract_response = requests.delete(delete_provider_contract_url,
+                                                                json=delete_provider_contract_payload, verify=False,
+                                                                headers=headers)
+            delete_consumer_contract_response = requests.delete(delete_consumer_contract_url,
+                                                                json=delete_consumer_contract_payload, verify=False,
+                                                                headers=headers)
+            delete_filter_response = requests.delete(delete_filter_url, json=delete_filter_payload, verify=False,
+                                                     headers=headers)
+            delete_provider_vrf_contract_response = requests.delete(delete_provider_vrf_contract_url,
+                                                                    json=delete_provider_vrf_contract_payload,
+                                                                    verify=False, headers=headers)
+            delete_consumer_vrf_contract_response = requests.delete(delete_consumer_vrf_contract_url,
+                                                                    json=delete_consumer_vrf_contract_payload,
+                                                                    verify=False, headers=headers)
 
             if (
-                delete_l3out_response.status_code == 200 and
-                delete_provider_contract_response.status_code == 200 and
-                delete_consumer_contract_response.status_code == 200 and
-                delete_filter_response.status_code == 200 and
-                delete_provider_vrf_contract_response.status_code == 200 and
-                delete_consumer_vrf_contract_response.status_code == 200
+                    delete_l3out_response.status_code == 200 and
+                    delete_provider_contract_response.status_code == 200 and
+                    delete_consumer_contract_response.status_code == 200 and
+                    delete_filter_response.status_code == 200 and
+                    delete_provider_vrf_contract_response.status_code == 200 and
+                    delete_consumer_vrf_contract_response.status_code == 200
             ):
-                return Response({'status': 'success','message': f'L3Out Deleted Successfully'})
+                return Response({'status': 'success', 'message': f'L3Out Deleted Successfully'})
             else:
                 return Response({
                     'status': 'error',
@@ -2375,7 +2393,1565 @@ class L3OutView(APIView):
             return Response({'status': 'error', 'message': str(e)}, status=500)
 
 
+class ExtSubnetView(APIView):
+    @method_decorator(token_required)
+    def get(self, request, l3out_name):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}"
+            }
+
+            # Get external EPG name
+            ext_epg_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}.json"
+                f"?query-target=children&target-subtree-class=l3extInstP"
+            )
+
+            response = requests.get(ext_epg_url, headers=headers, verify=False)
+            ext_epg_name = None
+
+            if response.status_code == 200:
+                data = response.json().get("imdata", [])
+                for item in data:
+                    if 'l3extInstP' in item and 'attributes' in item['l3extInstP']:
+                        ext_epg_name = item['l3extInstP']['attributes'].get('name')
+                        break
+
+            # Get external subnets
+            ext_subnet = []
+            if ext_epg_name:
+                ext_subnet_url = (
+                    f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                    f"instP-{ext_epg_name}.json"
+                    f"?query-target=subtree&target-subtree-class=l3extSubnet"
+                    f"&rsp-subtree-class=l3extRsSubnetToProfile,l3extRsSubnetToRtSumm"
+                )
+                response = requests.get(ext_subnet_url, headers=headers, verify=False)
+
+                if response.status_code == 200:
+                    ext_subnet_json = response.json().get("imdata", [])
+                    for route in ext_subnet_json:
+                        subnet = route.get("l3extSubnet", {}).get("attributes", {})
+                        ext_subnet.append({
+                            "ip": subnet.get("ip"),
+                            "descr": subnet.get("descr"),
+                            "scope": subnet.get("scope"),
+                        })
+                else:
+                    return Response({
+                        "success": False,
+                        "message": "Failed to fetch external subnet data",
+                        "status_code": response.status_code
+                    }, status=502)
+
+            return Response({
+                "l3out_name": l3out_name,
+                "ext_epg_name": ext_epg_name,
+                "ext_subnet": ext_subnet
+            })
+
+        except Exception as e:
+            return Response({"success": False, "message": str(e)}, status=500)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        cisco_token = get_cisco_token()
+        user = request.user
+        base_tenant = user.get('tenant_list')[0]
+
+        l3out_name = request.data.get('l3out_name')
+        ext_epg_name = request.data.get('extepg_name')
+        subnet_ip = request.data.get('subnet_ip')
+
+        headers = {
+            "Cookie": f"APIC-cookie={cisco_token}",
+            "Content-Type": "application/json"
+        }
+
+        # Check if subnet already exists
+        ext_subnet_url = (
+            f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+            f"instP-{ext_epg_name}.json"
+            f"?query-target=subtree&target-subtree-class=l3extSubnet"
+            f"&rsp-subtree-class=l3extRsSubnetToProfile,l3extRsSubnetToRtSumm"
+        )
+
+        response = requests.get(ext_subnet_url, headers=headers, verify=False)
+
+        if response.status_code == 200:
+            ext_subnet_json = response.json().get("imdata", [])
+            for route in ext_subnet_json:
+                subnet = route.get("l3extSubnet", {}).get("attributes", {})
+                if subnet.get("ip") == subnet_ip:
+                    return Response({'status': 'error', 'message': 'External Subnet already exists'}, status=409)
+
+        # Create new subnet
+        create_ext_subnet_url = (
+            f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+            f"instP-{ext_epg_name}/extsubnet-[{subnet_ip}].json"
+        )
+        create_ext_subnet_payload = {
+            "l3extSubnet": {
+                "attributes": {
+                    "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/instP-{ext_epg_name}/extsubnet-[{subnet_ip}]",
+                    "ip": subnet_ip,
+                    "scope": "import-security,",
+                    "aggregate": "",
+                    "rn": f"extsubnet-[{subnet_ip}]",
+                    "status": "created"
+                },
+                "children": []
+            }
+        }
+
+        response = requests.post(create_ext_subnet_url, headers=headers, json=create_ext_subnet_payload, verify=False)
+
+        if response.status_code == 200:
+            return Response({'status': 'success', 'message': 'External Subnet created successfully'})
+        else:
+            return Response({
+                'status': 'error',
+                'message': f"Failed to create External Subnet: {response.status_code} {response.text}"
+            }, status=response.status_code)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            ext_epg_name = request.data.get('extepg_name')
+            subnet_ip = request.data.get('subnet_ip')
+
+            if not ext_epg_name or not l3out_name or not subnet_ip:
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            delete_ext_subnet_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                f"instP-{ext_epg_name}/extsubnet-[{subnet_ip}].json"
+            )
+            delete_ext_subnet_payload = {
+                "l3extSubnet": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/instP-{ext_epg_name}/extsubnet-[{subnet_ip}]",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            response = requests.delete(delete_ext_subnet_url, json=delete_ext_subnet_payload, verify=False,
+                                       headers=headers)
+
+            if response.status_code == 200:
+                return Response({'status': 'success', 'message': 'External Subnet deleted successfully'},
+                                status=status.HTTP_200_OK)
+            else:
+                return Response(
+                    {'status': 'error', 'message': f"Failed to delete External Subnet: {response.status_code}"},
+                    status=response.status_code)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+##################################################
+################# NODE PROFILE ###################
+##################################################
 
+class NodeProfileView(APIView):
+    @method_decorator(token_required)
+    def get(self, request, l3out_name=None):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            cisco_headers = {
+                "Cookie": f"APIC-cookie={cisco_token}"
+            }
+
+            selected_node_profile = request.GET.get('node_profile')  # optional for detail
+
+            node_profiles = []
+            node_data = []
+
+            if not l3out_name:
+                return Response({'success': False, 'error': 'L3Out name is required in URL'}, status=400)
+
+            if selected_node_profile:
+                # fetch_node_profile_details
+                api_url = (
+                    f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{selected_node_profile}.json"
+                    "?query-target=subtree&target-subtree-class=l3extRsNodeL3OutAtt,l3extLoopBackIfP,mplsNodeSidP"
+                )
+                response = requests.get(api_url, headers=cisco_headers, verify=False)
+
+                if response.status_code == 200:
+                    data = response.json().get('imdata', [])
+                    for item in data:
+                        attrs = item.get('l3extRsNodeL3OutAtt', {}).get('attributes', {})
+                        rtr_id = attrs.get('rtrId')
+                        tDn = attrs.get('tDn')
+                        node_dn = attrs.get('dn')
+                        loopback = attrs.get('rtrIdLoopBack')
+                        rtr_id_loopback = loopback
+
+                        loopback_found = False
+                        for lp in data:
+                            lp_attrs = lp.get('l3extLoopBackIfP', {}).get('attributes', {})
+                            dn = lp_attrs.get('dn')
+                            if dn:
+                                lp_dn = dn.split('/lbp-')[0] if '/lbp-' in dn else dn
+                                if node_dn == lp_dn:
+                                    rtr_id_loopback = lp_attrs.get('addr')
+                                    loopback_found = True
+                                    break
+
+                        if not loopback_found and rtr_id_loopback == "yes":
+                            rtr_id_loopback = rtr_id
+
+                        if rtr_id and tDn and rtr_id_loopback:
+                            node_data.append({
+                                'rtrId': rtr_id,
+                                'tDn': tDn,
+                                'loopback': loopback,
+                                'rtrIdLoopBack': rtr_id_loopback
+                            })
+
+            node_profiles = get_node_profiles(cisco_headers, l3out_name, base_tenant)
+
+            return Response({
+                'node_profiles': node_profiles,
+                'node_data': node_data,
+            })
+
+        except KeyError:
+            return Response({'success': False, 'error': 'Session expired'}, status=403)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            node_profile_type = request.data.get('node_profile_type')
+            l3out_name = request.data.get('l3out_name')
+            node_id = request.data.get('leaf_profile', '').lower()
+            router_ip = request.data.get('router_ip')
+            loopback_ip = request.data.get('loopback_ip')
+            use_router_ip_as_loopback = request.data.get('use_router_ip_as_loopback')
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            if node_profile_type == "New":
+                node = request.data.get('node_profile_name')
+                node_name = f"{base_tenant}-{node}-nodeProfile" if node else None
+
+                if not l3out_name or not node_name:
+                    return Response({
+                        'status': 'error',
+                        'message': "Profile name or node name is missing. Please ensure all required fields are filled."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                create_node_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}.json"
+
+                rtrIdLoopBack = "true" if use_router_ip_as_loopback else "false"
+                if use_router_ip_as_loopback:
+                    loopback_ip = router_ip
+
+                node_payload = {
+                    "l3extLNodeP": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}",
+                            "name": node_name,
+                            "rn": f"lnodep-{node_name}",
+                            "status": "created"
+                        },
+                        "children": [
+                            {
+                                "l3extRsNodeL3OutAtt": {
+                                    "attributes": {
+                                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/rsnodeL3OutAtt-[topology/pod-1/{node_id}]",
+                                        "tDn": f"topology/pod-1/{node_id}",
+                                        "rtrId": router_ip,
+                                        "rtrIdLoopBack": rtrIdLoopBack,
+                                        "rn": f"rsnodeL3OutAtt-[topology/pod-1/{node_id}]",
+                                        "status": "created"
+                                    },
+                                    "children": []
+                                }
+                            }
+                        ]
+                    }
+                }
+
+                if loopback_ip:
+                    node_payload["l3extLNodeP"]["children"][0]["l3extRsNodeL3OutAtt"]["children"].append({
+                        "l3extLoopBackIfP": {
+                            "attributes": {
+                                "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/rsnodeL3OutAtt-[topology/pod-1/{node_id}]/lbp-[{loopback_ip}]",
+                                "addr": loopback_ip,
+                                "rn": f"lbp-[{loopback_ip}]",
+                                "status": "created"
+                            },
+                            "children": []
+                        }
+                    })
+
+                response = requests.post(create_node_url, json=node_payload, headers=headers, verify=False)
+
+                if response.status_code == 200:
+                    return Response({'status': 'success', 'message': "Node Profile created successfully."})
+                else:
+                    return Response({
+                        'status': 'error',
+                        'message': f"Failed to create Node Profile. Response: {response.text}"
+                    }, status=response.status_code)
+
+            elif node_profile_type == "Existing":
+                node_name = request.data.get('node_profile')
+
+                create_node_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/rsnodeL3OutAtt-[topology/pod-1/{node_id}].json"
+
+                rtrIdLoopBack = "true" if use_router_ip_as_loopback else "false"
+                if use_router_ip_as_loopback:
+                    loopback_ip = router_ip
+
+                node_payload = {
+                    "l3extRsNodeL3OutAtt": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/rsnodeL3OutAtt-[topology/pod-1/{node_id}]",
+                            "tDn": f"topology/pod-1/{node_id}",
+                            "rtrId": router_ip,
+                            "rtrIdLoopBack": rtrIdLoopBack,
+                            "rn": f"rsnodeL3OutAtt-[topology/pod-1/{node_id}]",
+                            "status": "created"
+                        },
+                        "children": []
+                    }
+                }
+
+                if loopback_ip:
+                    node_payload["l3extRsNodeL3OutAtt"]["children"].append({
+                        "l3extLoopBackIfP": {
+                            "attributes": {
+                                "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/rsnodeL3OutAtt-[topology/pod-1/{node_id}]/lbp-[{loopback_ip}]",
+                                "addr": loopback_ip,
+                                "rn": f"lbp-[{loopback_ip}]",
+                                "status": "created"
+                            },
+                            "children": []
+                        }
+                    })
+
+                response = requests.post(create_node_url, json=node_payload, headers=headers, verify=False)
+
+                if response.status_code == 200:
+                    return Response({'status': 'success', 'message': "Node Profile created successfully."})
+                else:
+                    return Response({
+                        'status': 'error',
+                        'message': f"Failed to create Node Profile. Response: {response.text}"
+                    }, status=response.status_code)
+
+        except Exception as e:
+            return Response({'status': 'error', 'message': str(e)}, status=500)
+
+        return Response({'status': 'error', 'message': 'Invalid request method'}, status=405)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+
+            if not node_profile or not l3out_name:
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+            url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}.json"
+            payload = {
+                "l3extLNodeP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.delete(url, json=payload, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                return Response({'success': True, 'message': 'Node Profile deleted successfully'})
+            else:
+                return Response({
+                    'success': False,
+                    'error': f'Failed to delete Node Profile: {response.status_code}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ConfiguredNodeView(APIView):
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            update_type = request.data.get('ip_type')
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            tDn = request.data.get('tdn')
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            if update_type == "Router ID":
+                router_ip = request.data.get('router_ip')
+
+                update_node_url = (
+                    f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}"
+                    f"/lnodep-{node_profile}/rsnodeL3OutAtt-[{tDn}].json"
+                )
+
+                node_payload = {
+                    "l3extRsNodeL3OutAtt": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/rsnodeL3OutAtt-[{tDn}]",
+                            "rtrId": router_ip
+                        },
+                        "children": []
+                    }
+                }
+
+                update_node_response = requests.post(update_node_url, json=node_payload, headers=headers, verify=False)
+
+                if update_node_response.status_code == 200:
+                    return Response({'status': 'success', 'message': "Router ID updated successfully."})
+                else:
+                    return Response({
+                        'status': 'error',
+                        'message': f"Failed to update Node Profile. Response: {update_node_response.text}"
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            else:
+                loopback_ip = request.data.get('loopback_ip')
+
+                update_loopback_url = (
+                    f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}"
+                    f"/rsnodeL3OutAtt-[{tDn}]/lbp-[{loopback_ip}].json"
+                )
+
+                loopback_payload = {
+                    "l3extLoopBackIfP": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/rsnodeL3OutAtt-[{tDn}]/lbp-[{loopback_ip}]",
+                            "addr": loopback_ip,
+                            "status": "created",
+                            "rn": f"lbp-[{loopback_ip}]"
+                        },
+                        "children": []
+                    }
+                }
+
+                update_loopback_response = requests.post(update_loopback_url, json=loopback_payload, headers=headers,
+                                                         verify=False)
+
+                if update_loopback_response.status_code == 200:
+                    return Response({'status': 'success', 'message': "Loopback Address updated successfully."})
+                else:
+                    return Response({
+                        'status': 'error',
+                        'message': f"Failed to update Node Profile. Response: {update_loopback_response.text}"
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            tDn = request.data.get('tdn')
+
+            if not node_profile or not l3out_name or not tDn:
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+            url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}"
+                f"/lnodep-{node_profile}/rsnodeL3OutAtt-[{tDn}].json"
+            )
+            payload = {
+                "l3extRsNodeL3OutAtt": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/rsnodeL3OutAtt-[{tDn}]",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.delete(url, json=payload, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                return Response({'success': True, 'message': 'Removed configured node from node profile successfully'})
+            else:
+                return Response({
+                    'success': False,
+                    'error': f'Failed to remove configured node: {response.status_code}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StaticRouteView(APIView):
+    @method_decorator(token_required)
+    def get(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.GET.get("l3out_name")
+            node_profile = request.GET.get("node_profile")
+            tDn = request.GET.get("tdn")
+
+            if not l3out_name or not node_profile or not tDn:
+                return Response({'success': False, 'error': 'Missing parameters'}, status=400)
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}"
+            }
+
+            static_route_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                f"lnodep-{node_profile}/rsnodeL3OutAtt-[{tDn}].json"
+                f"?query-target=subtree&target-subtree-class=ipRouteP&rsp-subtree=children"
+            )
+
+            response = requests.get(static_route_url, headers=headers, verify=False)
+            static_route = []
+
+            if response.status_code == 200:
+                static_route_json = response.json().get("imdata", [])
+                for route in static_route_json:
+                    ip_route = route.get("ipRouteP", {}).get("attributes", {})
+                    children = route.get("ipRouteP", {}).get("children", [])
+                    next_hops = []
+
+                    for child in children:
+                        nexthop = child.get("ipNexthopP", {}).get("attributes", {})
+                        if nexthop:
+                            next_hops.append({
+                                "nhAddr": nexthop.get("nhAddr"),
+                                "pref": nexthop.get("pref"),
+                            })
+
+                    static_route.append({
+                        "ip": ip_route.get("ip"),
+                        "descr": ip_route.get("descr"),
+                        "pref": ip_route.get("pref"),
+                        "next_hops": next_hops,
+                    })
+            else:
+                return Response({'success': False, 'error': 'Failed to fetch static route'},
+                                status=response.status_code)
+
+            return Response({
+                "static_route": static_route
+            })
+
+        except KeyError:
+            return Response({'success': False, 'error': 'Session expired'}, status=403)
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=500)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            path = request.data.get('path')
+            prefix_ip = request.data.get('prefix_ip')
+            nexthop_ip = request.data.get('nexthop_ip')
+            preference = request.data.get('preference')
+            route_control = request.data.get('bfd')
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            # Check if route already exists
+            static_route_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                f"lnodep-{node_profile}/rsnodeL3OutAtt-[{path}].json"
+                f"?query-target=subtree&target-subtree-class=ipRouteP&rsp-subtree=children"
+            )
+
+            response = requests.get(static_route_url, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                static_route_json = response.json().get("imdata", [])
+                for route in static_route_json:
+                    ip_route = route.get("ipRouteP", {}).get("attributes", {})
+                    if ip_route.get("ip") == prefix_ip:
+                        return Response({'status': 'error', 'message': 'Static route already exists'}, status=409)
+
+            # Create static route
+            create_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                f"lnodep-{node_profile}/rsnodeL3OutAtt-[{path}]/rt-[{prefix_ip}].json"
+            )
+
+            payload = {
+                "ipRouteP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/rsnodeL3OutAtt-[{path}]/rt-[{prefix_ip}]",
+                        "ip": prefix_ip,
+                        **({"rtCtrl": "bfd"} if route_control == "on" else {}),
+                        "rn": f"rt-[{prefix_ip}]",
+                        "status": "created"
+                    },
+                    "children": [
+                        {
+                            "ipNexthopP": {
+                                "attributes": {
+                                    "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/rsnodeL3OutAtt-[{path}]/rt-[{prefix_ip}]/nh-[{nexthop_ip}]",
+                                    "nhAddr": nexthop_ip,
+                                    "pref": preference,
+                                    "rn": f"nh-[{nexthop_ip}]",
+                                    "status": "created"
+                                },
+                                "children": []
+                            }
+                        }
+                    ]
+                }
+            }
+
+            response = requests.post(create_url, headers=headers, json=payload, verify=False)
+
+            if response.status_code == 200:
+                return Response({'status': 'success', 'message': 'Static Route created successfully'})
+            else:
+                return Response(
+                    {'status': 'error',
+                     'message': f"Failed to create Static Route: {response.status_code} {response.text}"},
+                    status=response.status_code
+                )
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=500)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            path = request.data.get('path')
+            ip = request.data.get('ip')
+
+            if not all([l3out_name, node_profile, path, ip]):
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+            delete_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                f"lnodep-{node_profile}/rsnodeL3OutAtt-[{path}]/rt-[{ip}].json"
+            )
+
+            payload = {
+                "ipRouteP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/rsnodeL3OutAtt-[{path}]/rt-[{ip}]",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.delete(delete_url, json=payload, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                return Response({'status': 'success', 'message': 'Static Route deleted successfully'})
+            else:
+                return Response({
+                    'status': 'error',
+                    'message': f"Failed to delete Static Route: {response.status_code}"
+                }, status=response.status_code)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+##################################################
+############## INTERFACE PROFILE #################
+##################################################
+
+class InterfaceProfileView(APIView):
+    @method_decorator(token_required)
+    def get(self, request, l3out_name=None):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+            cisco_headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+
+            selected_node_profile = request.GET.get('node_profile')
+            selected_interface_profile = request.GET.get('interface_profile')
+
+            if not l3out_name:
+                return Response({'success': False, 'error': 'L3Out name is required in URL'}, status=400)
+
+            # Case 1: Only node_profile → Return interface profiles
+            if selected_node_profile and not selected_interface_profile:
+                interface_profiles = get_interface_profiles(cisco_headers, l3out_name, base_tenant,
+                                                            selected_node_profile)
+                return Response({
+                    'l3out_name': l3out_name,
+                    'node_profile': selected_node_profile,
+                    'interface_profiles': interface_profiles,
+                    'interface_profile_data': []
+                })
+
+            # Case 2: node_profile + interface_profile → Return detailed interface config
+            elif selected_node_profile and selected_interface_profile:
+                api_url = (
+                    f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                    f"lnodep-{selected_node_profile}/lifp-{selected_interface_profile}.json"
+                    "?query-target=subtree&target-subtree-class=l3extRsPathL3OutAtt,l3extIp,ptpRtdEpgCfg"
+                )
+                response = requests.get(api_url, headers=cisco_headers, verify=False)
+
+                interface_profile_data = []
+                if response.status_code == 200:
+                    data = response.json().get('imdata', [])
+                    for item in data:
+                        attributes = item.get('l3extRsPathL3OutAtt', {}).get('attributes', {})
+                        if attributes.get('ifInstT') == 'l3-port':
+                            interface_profile_data.append({
+                                'tDn': attributes.get('tDn'),
+                                'addr': attributes.get('addr'),
+                                'mtu': attributes.get('mtu')
+                            })
+
+                return Response({
+                    'l3out_name': l3out_name,
+                    'node_profile': selected_node_profile,
+                    'interface_profile': selected_interface_profile,
+                    'interface_profile_data': interface_profile_data
+                })
+
+            # Case 3: Missing node_profile
+            else:
+                return Response({'success': False, 'error': 'Missing node_profile or interface_profile'}, status=400)
+
+        except KeyError:
+            return Response({'success': False, 'error': 'Session expired'}, status=403)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_name = request.data.get('node_profile')
+
+            node_id = request.data.get('leaf_profile', '').lower()
+            interface_id = request.data.get('interface_id')
+            mtu = request.data.get('mtu')
+            interface_ip = request.data.get('interface_ip')
+
+            interface_profile_type = request.data.get('interface_profile_type')
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            if interface_profile_type == "New":
+                interface = request.data.get('interface_profile_name')
+                interface_name = f"{base_tenant}-{interface}-interfaceProfile" if interface else None
+
+                if not l3out_name or not interface_name:
+                    return Response({
+                        'status': 'error',
+                        'message': "Profile name or node name is missing. Please ensure all required fields are filled."
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                create_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/lifp-{interface_name}.json"
+
+                payload = {
+                    "l3extLIfP": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/lifp-{interface_name}",
+                            "name": interface_name,
+                            "rn": f"lifp-{interface_name}",
+                            "status": "created"
+                        },
+                        "children": [
+                            {
+                                "l3extRsPathL3OutAtt": {
+                                    "attributes": {
+                                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/lifp-{interface_name}/rspathL3OutAtt-[topology/pod-1/paths-{node_id.split('-')[-1]}/pathep-[{interface_id}]]",
+                                        "mac": "00:22:BD:F8:19:FF",
+                                        "ifInstT": "l3-port",
+                                        "addr": interface_ip,
+                                        "mtu": mtu,
+                                        "tDn": f"topology/pod-1/paths-{node_id.split('-')[-1]}/pathep-[{interface_id}]",
+                                        "rn": f"rspathL3OutAtt-[topology/pod-1/paths-{node_id.split('-')[-1]}/pathep-[{interface_id}]]",
+                                        "status": "created"
+                                    },
+                                    "children": []
+                                }
+                            }
+                        ]
+                    }
+                }
+
+                resp = requests.post(create_url, json=payload, headers=headers, verify=False)
+
+                if resp.status_code == 200:
+                    return Response({'status': 'success', 'message': "Routed Interface Profile created successfully."})
+                else:
+                    return Response({
+                        'status': 'error',
+                        'message': f"Failed to create Routed Interface Profile. Response: {resp.text}"
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            elif interface_profile_type == "Existing":
+                interface_name = request.data.get('interface_profile')
+
+                create_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/lifp-{interface_name}.json"
+
+                payload = {
+                    "l3extRsPathL3OutAtt": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_name}/lifp-{interface_name}/rspathL3OutAtt-[topology/pod-1/paths-{node_id.split('-')[-1]}/pathep-[{interface_id}]]",
+                            "mac": "00:22:BD:F8:19:FF",
+                            "ifInstT": "l3-port",
+                            "addr": interface_ip,
+                            "mtu": mtu,
+                            "tDn": f"topology/pod-1/paths-{node_id.split('-')[-1]}/pathep-[{interface_id}]",
+                            "rn": f"rspathL3OutAtt-[topology/pod-1/paths-{node_id.split('-')[-1]}/pathep-[{interface_id}]]",
+                            "status": "created"
+                        },
+                        "children": []
+                    }
+                }
+
+                resp = requests.post(create_url, json=payload, headers=headers, verify=False)
+
+                if resp.status_code == 200:
+                    return Response({'status': 'success', 'message': "Routed Interface Profile created successfully."})
+                else:
+                    return Response({
+                        'status': 'error',
+                        'message': f"Failed to create Routed Interface Profile. Response: {resp.text}"
+                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'status': 'error', 'message': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response({'status': 'error', 'message': 'Invalid request method'},
+                        status=status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            interface_profile = request.data.get('interface_profile')
+
+            if not l3out_name or not node_profile or not interface_profile:
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+            delete_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}.json"
+            payload = {
+                "l3extLIfP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.delete(delete_url, json=payload, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                return Response({'success': True, 'message': 'Interface Profile deleted successfully'})
+            else:
+                return Response(
+                    {'success': False, 'error': f'Failed to delete interface profile: {response.status_code}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class RoutedInterfaceView(APIView):
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            interface_profile = request.data.get('interface_profile')
+            tDn = request.data.get('path')
+            addr = request.data.get('address')
+            mtu = request.data.get('mtu')
+
+            if not all([node_profile, l3out_name, interface_profile, tDn, addr, mtu]):
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+            update_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                f"lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}].json"
+            )
+
+            payload = {
+                "l3extRsPathL3OutAtt": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}]",
+                        "addr": addr,
+                        "mtu": mtu
+                    },
+                    "children": []
+                }
+            }
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.post(update_url, json=payload, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                return Response({'success': True, 'message': 'Routed Interface Profile updated successfully'})
+            else:
+                return Response({
+                    'success': False,
+                    'error': f'Failed to update Routed Interface Profile: {response.status_code}'
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            interface_profile = request.data.get('interface_profile')
+            tDn = request.data.get('path')
+
+            if not node_profile or not l3out_name or not interface_profile or not tDn:
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+            delete_routed_interface_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/"
+                f"out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}].json"
+            )
+
+            payload = {
+                "l3extRsPathL3OutAtt": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}]",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.delete(delete_routed_interface_url, json=payload, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                return Response({'success': True, 'message': 'Routed Interface removed successfully'})
+            else:
+                return Response(
+                    {'success': False, 'error': f'Failed to remove Routed Interface: {response.status_code}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SviInterfaceProfileAPIView(APIView):
+    @method_decorator(token_required)
+    def get(self, request, l3out_name=None):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+            cisco_headers = {"Cookie": f"APIC-cookie={cisco_token}"}
+
+            vpc = get_fabric_path_eps(cisco_headers,base_tenant)
+
+            # Case: Only /svi_interface_profile – return vpc
+            if not l3out_name:
+                return Response({'vpc': vpc})
+
+            selected_node_profile = request.GET.get('node_profile')
+            selected_interface_profile = request.GET.get('interface_profile')
+
+            # Case 1: Only node_profile → Return interface profiles
+            if selected_node_profile and not selected_interface_profile:
+                interface_profiles = get_interface_profiles(cisco_headers, l3out_name, base_tenant, selected_node_profile)
+                return Response({
+                    'l3out_name': l3out_name,
+                    'node_profile': selected_node_profile,
+                    'interface_profiles': interface_profiles,
+                    'interface_profile_data': []
+                })
+
+            # Case 2: node_profile + interface_profile → Return detailed interface config
+            elif selected_node_profile and selected_interface_profile:
+                api_url = (
+                    f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                    f"lnodep-{selected_node_profile}/lifp-{selected_interface_profile}.json"
+                    "?query-target=subtree&target-subtree-class=l3extRsPathL3OutAtt,l3extIp,l3extMember"
+                )
+
+                response = requests.get(api_url, headers=cisco_headers, verify=False)
+                interface_profile_data = []
+
+                if response.status_code == 200:
+                    data = response.json().get('imdata', [])
+                    for item in data:
+                        attributes = item.get('l3extRsPathL3OutAtt', {}).get('attributes', {})
+                        if_inst_type = attributes.get('ifInstT')
+
+                        if if_inst_type == "l3-port":
+                            continue
+
+                        if if_inst_type == "ext-svi":
+                            node_dn = attributes.get('dn')
+                            result = node_dn.split('rspathL3OutAtt-')[-1].strip("[]")
+                            addr = attributes.get('addr')
+                            mtu = attributes.get('mtu')
+                            encap = attributes.get('encap')
+                            mode = "Trunk" if attributes.get('mode') == 'regular' else "Access(untagged)"
+
+                            addr_A = addr_B = side_A = side_B = sec_addr = ""
+                            for member in data:
+                                if 'l3extIp' in member:
+                                    l3ext_ip_dn = member['l3extIp']['attributes'].get('dn', '')
+                                    if node_dn in l3ext_ip_dn:
+                                        sec_addr = member['l3extIp']['attributes'].get('addr')
+
+                                member_attributes = member.get('l3extMember', {}).get('attributes', {})
+                                side = member_attributes.get('side')
+                                dn = member_attributes.get('dn', '')
+
+                                if side == 'A' and node_dn == dn.split('/mem-A')[0]:
+                                    addr_A = member_attributes.get('addr')
+                                    side_A = side
+                                elif side == 'B' and node_dn == dn.split('/mem-B')[0]:
+                                    addr_B = member_attributes.get('addr')
+                                    side_B = side
+
+                            interface_profile_data.append({
+                                "result": result,
+                                "addr": addr,
+                                "mtu": mtu,
+                                "encap": encap,
+                                "addr_A": addr_A,
+                                "side_A": side_A,
+                                "addr_B": addr_B,
+                                "side_B": side_B,
+                                "sec_addr": sec_addr,
+                                "mode": mode,
+                            })
+
+                return Response({
+                    'l3out_name': l3out_name,
+                    'node_profile': selected_node_profile,
+                    'interface_profile': selected_interface_profile,
+                    'interface_profile_data': interface_profile_data,
+                })
+
+            # Case 3: Missing node_profile
+            return Response({'success': False, 'error': 'Missing node_profile or interface_profile'}, status=400)
+
+        except KeyError:
+            return Response({'success': False, 'error': 'Session expired'}, status=403)
+
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            interface_profile = request.data.get('interface_profile')
+
+            if not l3out_name or not node_profile or not interface_profile:
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=status.HTTP_400_BAD_REQUEST)
+
+            delete_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}.json"
+            payload = {
+                "l3extLIfP": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.delete(delete_url, json=payload, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                return Response({'success': True, 'message': 'Interface Profile deleted successfully'})
+            else:
+                return Response(
+                    {'success': False, 'error': f'Failed to delete interface profile: {response.status_code}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            data = request.data
+            l3out_name = data.get('l3out_name')
+            node_profile = data.get('node_profile')
+            profile_type = data.get('profile_type')
+            interface_profile_type = data.get('interface_profile_type')
+            mtu = data.get('mtu')
+            vlan = data.get('vlan_id')
+            vlan_id = f"vlan-{vlan}"
+            mode_bond = data.get('mode_bond')
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            is_valid_vlan = l3out_vlan_pool_check(vlan_id, base_tenant, headers)
+            if is_valid_vlan is False:
+                return Response({'status': 'error', 'message': "VLAN is not within range"})
+
+            if profile_type == "Individual":
+                node_id = data.get('leaf_profile').split('-')[-1]
+                interface_id = data.get('interface_id')
+                addr = data.get('addr')
+
+                if interface_profile_type == "New":
+                    interface = data.get('interface_profile_name')
+                    interface_name = f"{base_tenant}-{interface}-interfaceProfile" if interface else None
+
+                    if not l3out_name or not interface_name:
+                        return Response({'status': 'error', 'message': "Profile name or node name is missing."})
+
+                    url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_name}.json"
+                    payload = {
+                        "l3extLIfP": {
+                            "attributes": {
+                                "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_name}",
+                                "name": interface_name,
+                                "rn": f"lifp-{interface_name}",
+                                "status": "created"
+                            },
+                            "children": [{
+                                "l3extRsPathL3OutAtt": {
+                                    "attributes": {
+                                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_name}/rspathL3OutAtt-[topology/pod-1/paths-{node_id}/pathep-[{interface_id}]]",
+                                        "mac": "00:22:BD:F8:19:FF",
+                                        "ifInstT": "ext-svi",
+                                        "encap": vlan_id,
+                                        "addr": addr,
+                                        "mtu": mtu,
+                                        "mode": mode_bond,
+                                        "tDn": f"topology/pod-1/paths-{node_id}/pathep-[{interface_id}]",
+                                        "rn": f"rspathL3OutAtt-[topology/pod-1/paths-{node_id}/pathep-[{interface_id}]]",
+                                        "status": "created"
+                                    },
+                                    "children": []
+                                }
+                            }]
+                        }
+                    }
+                    res = requests.post(url, json=payload, headers=headers, verify=False)
+                    if res.status_code == 200:
+                        return Response(
+                            {'status': 'success', 'message': "SVI Interface Profile created successfully."})
+                    return Response({'status': 'error',
+                                     'message': f"Failed to create SVI Interface Profile. Response: {res.text}"})
+
+                elif interface_profile_type == "Existing":
+                    interface_profile = data.get('interface_profile')
+                    url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[topology/pod-1/paths-{node_id}/pathep-[{interface_id}]].json"
+                    payload = {
+                        "l3extRsPathL3OutAtt": {
+                            "attributes": {
+                                "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[topology/pod-1/paths-{node_id}/pathep-[{interface_id}]]",
+                                "mac": "00:22:BD:F8:19:FF",
+                                "ifInstT": "ext-svi",
+                                "encap": vlan_id,
+                                "addr": addr,
+                                "mtu": mtu,
+                                "mode": mode_bond,
+                                "tDn": f"topology/pod-1/paths-{node_id}/pathep-[{interface_id}]",
+                                "rn": f"rspathL3OutAtt-[topology/pod-1/paths-{node_id}/pathep-[{interface_id}]]",
+                                "status": "created"
+                            },
+                            "children": []
+                        }
+                    }
+                    res = requests.post(url, json=payload, headers=headers, verify=False)
+                    if res.status_code == 200:
+                        return Response(
+                            {'status': 'success', 'message': "SVI Interface Profile created successfully."})
+                    return Response({'status': 'error',
+                                     'message': f"Failed to create SVI Interface Profile. Response: {res.text}"})
+
+            elif profile_type == "Bond":
+                vpc_policy_groups = data.get('vpc_policy_groups')
+                side_a = data.get('side_a')
+                side_b = data.get('side_b')
+                sec_addr = data.get('sec_addr')
+
+                if interface_profile_type == "New":
+                    interface = data.get('interface_profile_name')
+                    interface_name = f"{base_tenant}-{interface}-interfaceProfile" if interface else None
+                    if not l3out_name or not interface_name:
+                        return Response({'status': 'error', 'message': "Profile name or node name is missing."})
+
+                    url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_name}.json"
+                    payload = self._build_bond_payload(base_tenant, l3out_name, node_profile, interface_name,
+                                                       vpc_policy_groups, mtu, vlan_id, mode_bond, side_a, side_b,
+                                                       sec_addr)
+                    res = requests.post(url, json=payload, headers=headers, verify=False)
+                    if res.status_code == 200:
+                        return Response(
+                            {'status': 'success', 'message': "SVI Interface Profile created successfully."})
+                    return Response({'status': 'error',
+                                     'message': f"Failed to create SVI Interface Profile. Response: {res.text}"})
+
+                elif interface_profile_type == "Existing":
+                    interface_profile = data.get('interface_profile')
+                    url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[topology/{vpc_policy_groups}].json"
+                    payload = self._build_bond_payload(base_tenant, l3out_name, node_profile, interface_profile,
+                                                       vpc_policy_groups, mtu, vlan_id, mode_bond, side_a, side_b,
+                                                       sec_addr)
+                    res = requests.post(url, json=payload, headers=headers, verify=False)
+                    if res.status_code == 200:
+                        return Response(
+                            {'status': 'success', 'message': "SVI Interface Profile created successfully."})
+                    return Response({'status': 'error',
+                                     'message': f"Failed to create SVI Interface Profile. Response: {res.text}"})
+
+        except Exception as e:
+            return Response({'status': 'error', 'message': str(e)})
+
+        return Response({'status': 'error', 'message': 'Invalid request method'})
+
+    def _build_bond_payload(self, tenant, l3out, node_profile, interface_name, vpc_pg, mtu, vlan_id, mode_bond,
+                            side_a, side_b, sec_addr):
+        return {
+            "l3extRsPathL3OutAtt": {
+                "attributes": {
+                    "dn": f"uni/tn-{tenant}/out-{l3out}/lnodep-{node_profile}/lifp-{interface_name}/rspathL3OutAtt-[topology/{vpc_pg}]",
+                    "mac": "00:22:BD:F8:19:FF",
+                    "ifInstT": "ext-svi",
+                    "mtu": mtu,
+                    "encap": vlan_id,
+                    "mode": mode_bond,
+                    "tDn": f"topology/{vpc_pg}",
+                    "rn": f"rspathL3OutAtt-[topology/{vpc_pg}]",
+                    "status": "created"
+                },
+                "children": [
+                    {
+                        "l3extMember": {
+                            "attributes": {
+                                "dn": f"uni/tn-{tenant}/out-{l3out}/lnodep-{node_profile}/lifp-{interface_name}/rspathL3OutAtt-[topology/{vpc_pg}]/mem-A",
+                                "addr": side_a,
+                                "llAddr": "0.0.0.0",
+                                "rn": "mem-A",
+                                "status": "created"
+                            },
+                            "children": [{
+                                "l3extIp": {
+                                    "attributes": {
+                                        "dn": f"uni/tn-{tenant}/out-{l3out}/lnodep-{node_profile}/lifp-{interface_name}/rspathL3OutAtt-[topology/{vpc_pg}]/mem-A/addr-[{sec_addr}]",
+                                        "addr": sec_addr,
+                                        "rn": f"addr-[{sec_addr}]",
+                                        "status": "created"
+                                    },
+                                    "children": []
+                                }
+                            }]
+                        }
+                    },
+                    {
+                        "l3extMember": {
+                            "attributes": {
+                                "dn": f"uni/tn-{tenant}/out-{l3out}/lnodep-{node_profile}/lifp-{interface_name}/rspathL3OutAtt-[topology/{vpc_pg}]/mem-B",
+                                "side": "B",
+                                "addr": side_b,
+                                "llAddr": "0.0.0.0",
+                                "rn": "mem-B",
+                                "status": "created"
+                            },
+                            "children": [{
+                                "l3extIp": {
+                                    "attributes": {
+                                        "dn": f"uni/tn-{tenant}/out-{l3out}/lnodep-{node_profile}/lifp-{interface_name}/rspathL3OutAtt-[topology/{vpc_pg}]/mem-B/addr-[{sec_addr}]",
+                                        "addr": sec_addr,
+                                        "rn": f"addr-[{sec_addr}]",
+                                        "status": "created"
+                                    },
+                                    "children": []
+                                }
+                            }]
+                        }
+                    }
+                ]
+            }
+        }
+
+
+class SviRoutedInterfaceAPIView(APIView):
+    @method_decorator(token_required)
+    def delete(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            interface_profile = request.data.get('interface_profile')
+            tDn = request.data.get('path')
+
+            if not node_profile or not l3out_name or not interface_profile or not tDn:
+                return Response({'success': False, 'error': 'Missing Parameters'}, status=400)
+
+            delete_url = (
+                f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/"
+                f"lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}].json"
+            )
+
+            delete_payload = {
+                "l3extRsPathL3OutAtt": {
+                    "attributes": {
+                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}]",
+                        "status": "deleted"
+                    },
+                    "children": []
+                }
+            }
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            response = requests.delete(delete_url, json=delete_payload, headers=headers, verify=False)
+
+            if response.status_code == 200:
+                return Response({'success': True, 'message': 'SVI Interface removed successfully'})
+            else:
+                return Response({'success': False, 'error': f'Failed to remove svi interface: {response.status_code}'}, status=response.status_code)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=500)
+
+    @method_decorator(token_required)
+    def post(self, request):
+        try:
+            cisco_token = get_cisco_token()
+            user = request.user
+            base_tenant = user.get('tenant_list')[0]
+
+            l3out_name = request.data.get('l3out_name')
+            node_profile = request.data.get('node_profile')
+            interface_profile = request.data.get('interface_profile')
+            tDn = request.data.get('path')
+            addr_a = request.data.get('addr_a')
+            addr_b = request.data.get('addr_b')
+            addr = request.data.get('address')
+            mtu = request.data.get('mtu')
+            vlan = request.data.get('encap')
+            vlan_id = f"vlan-{vlan}"
+            mode_bond = request.data.get('mode')
+
+            if mode_bond == "Trunk":
+                mode_bond = "regular"
+            elif mode_bond == "Access":
+                mode_bond = "untagged"
+
+            headers = {
+                "Cookie": f"APIC-cookie={cisco_token}",
+                "Content-Type": "application/json"
+            }
+
+            is_valid_vlan = l3out_vlan_pool_check(vlan_id, base_tenant, headers)
+            if not is_valid_vlan:
+                return Response({'success': False, 'error': "VLAN is not within range"}, status=400)
+
+            if 'eth1/' in tDn:
+                if not all([node_profile, l3out_name, interface_profile, tDn, addr, mtu, vlan_id, mode_bond]):
+                    return Response({'success': False, 'error': 'Missing Parameters'}, status=400)
+
+                update_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}].json"
+                payload = {
+                    "l3extRsPathL3OutAtt": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}]",
+                            "encap": vlan_id,
+                            "addr": addr,
+                            "mode": mode_bond,
+                            "mtu": mtu
+                        },
+                        "children": []
+                    }
+                }
+
+                response = requests.post(update_url, json=payload, headers=headers, verify=False)
+
+                if response.status_code == 200:
+                    return Response({'success': True, 'message': 'SVI Interface Profile updated successfully'})
+                else:
+                    return Response({'success': False, 'error': f'Failed to update SVI Interface Profile: {response.status_code} {response.text}'}, status=response.status_code)
+            else:
+                if not all([node_profile, l3out_name, interface_profile, tDn, addr_a, addr_b, mtu, vlan_id, mode_bond]):
+                    return Response({'success': False, 'error': 'Missing Parameters'}, status=400)
+
+                update_url = f"https://172.31.231.91/api/node/mo/uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}].json"
+                payload = {
+                    "l3extRsPathL3OutAtt": {
+                        "attributes": {
+                            "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}]",
+                            "encap": vlan_id,
+                            "addr": addr,
+                            "mode": mode_bond,
+                            "mtu": mtu
+                        },
+                        "children": [
+                            {
+                                "l3extMember": {
+                                    "attributes": {
+                                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}]/mem-A",
+                                        "addr": addr_a
+                                    },
+                                    "children": []
+                                }
+                            },
+                            {
+                                "l3extMember": {
+                                    "attributes": {
+                                        "dn": f"uni/tn-{base_tenant}/out-{l3out_name}/lnodep-{node_profile}/lifp-{interface_profile}/rspathL3OutAtt-[{tDn}]/mem-B",
+                                        "addr": addr_b
+                                    },
+                                    "children": []
+                                }
+                            }
+                        ]
+                    }
+                }
+
+                print(payload)
+
+                response = requests.post(update_url, json=payload, headers=headers, verify=False)
+
+                if response.status_code == 200:
+                    return Response({'success': True, 'message': 'SVI Interface Profile updated successfully'})
+                else:
+                    return Response({'success': False, 'error': f'Failed to update SVI Interface Profile: {response.text}'}, status=response.status_code)
+
+        except Exception as e:
+            return Response({'success': False, 'error': str(e)}, status=500)
 

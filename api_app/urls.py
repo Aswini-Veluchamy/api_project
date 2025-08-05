@@ -12,7 +12,10 @@ from .views import Contracts, SubjectHandler
 from .views import Filters, EntryHandler, ContractMapping
 from .views import SecurityGroup, SecurityGroupRule
 from .views import ColoPolicyGroup, UpdateVpcPolicyGroup, ColoAccessPort, ColoStaticEpgView
-from .views import L3OutView
+from .views import L3OutView, ExtSubnetView
+from .views import NodeProfileView, ConfiguredNodeView, StaticRouteView
+from .views import InterfaceProfileView, RoutedInterfaceView
+from .views import SviInterfaceProfileAPIView, SviRoutedInterfaceAPIView
 
 urlpatterns = [
     path('login/', UserLogin.as_view(), name='login'),
@@ -35,4 +38,16 @@ urlpatterns = [
     path('deploy_static_epg/<str:action>/', ColoStaticEpgView.as_view(), name="fetch-epgs"),
     path('deploy_static_epg/<str:action>/<str:ap_name>/', ColoStaticEpgView.as_view(), name="fetch-epg-details"),
     path('l3out/', L3OutView.as_view(), name="l3out"),
+    path('ext_subnet/', ExtSubnetView.as_view(), name='ext_subnet'),
+    path('ext_subnet/<str:l3out_name>/', ExtSubnetView.as_view(), name='ext_subnet'),
+    path('node_profile/', NodeProfileView.as_view(), name='node_profile'),
+    path('node_profile/<str:l3out_name>/', NodeProfileView.as_view(), name='node_profile'),
+    path('configured_node/', ConfiguredNodeView.as_view(), name='configured_node'),
+    path('static_route/', StaticRouteView.as_view(), name='static_route'),
+    path('interface_profile/', InterfaceProfileView.as_view(), name='interface_profile'),
+    path('interface_profile/<str:l3out_name>/', InterfaceProfileView.as_view(), name='interface_profile'),
+    path('routed_interface/', RoutedInterfaceView.as_view(), name='routed_interface'),
+    path('svi_interface_profile/', SviInterfaceProfileAPIView.as_view(), name='svi_interface_profile'),
+    path('svi_interface_profile/<str:l3out_name>/', SviInterfaceProfileAPIView.as_view(), name='svi_interface_profile'),
+    path('svi_routed_interface/', SviRoutedInterfaceAPIView.as_view(), name='svi_routed_interface'),
 ]

@@ -113,3 +113,61 @@ def get_vrf_list(cisco_headers, base_tenant):
         vrf_list = [vrf.get("fvCtx", {}).get("attributes", {}).get("name") for vrf in vrf_data_json]
         return vrf_list
     return []
+
+
+def get_fabric_path_eps(cisco_headers,base_tenant):
+    fabric_path_ep_url = (
+        "https://172.31.231.91/api/node/class/fabricPathEp.json?"
+        "query-target-filter=and(eq(fabricPathEp.lagT,\"node\"),"
+        "wcard(fabricPathEp.dn,\"^topology/pod-[\\d]*/protpaths-\"))"
+    )
+
+    # Fetch fabric path endpoints
+    response = requests.get(fabric_path_ep_url, headers=cisco_headers, verify=False)
+
+    if response.status_code == 200:
+        fabric_path_eps = []
+        for item in response.json().get('imdata', []):
+            attributes = item.get('fabricPathEp', {}).get('attributes', {})
+            name = attributes.get('name')
+            dn = attributes.get('dn')
+
+            pod_and_node = []
+
+            # Extract pod and protNode information from 'dn'
+            if dn:
+                dn_parts = dn.split('/')
+                if len(dn_parts) >= 3:
+                    pod_and_node = '/'.join(dn_parts[1:])
+                else:
+                    pod_and_node = "Unknown"
+            if base_tenant in name:
+                fabric_path_eps.append({"name": name, "pod_and_node": pod_and_node})
+
+        return fabric_path_eps
+    return None
+
+
+def l3out_vlan_pool_check(vlan_id, base_tenant, cisco_headers):
+    vlan_pool_url = (
+        f"https://172.31.231.91/api/node/mo/uni/infra/vlanns-[{base_tenant}-l3out-pool]-static.json"
+        f"?query-target=children&target-subtree-class=fvnsEncapBlk"
+    )
+
+    try:
+        # Fetch VLAN ranges from the specific pool
+        response = requests.get(vlan_pool_url, headers=cisco_headers, verify=False)
+        response.raise_for_status()
+        vlan_ranges = response.json().get('imdata', [])
+
+        # Check if the VLAN ID is in any of the ranges
+        for vlan_range in vlan_ranges:
+            if 'fvnsEncapBlk' in vlan_range:
+                from_vlan = str(vlan_range['fvnsEncapBlk']['attributes']['from'])
+                to_vlan = str(vlan_range['fvnsEncapBlk']['attributes']['to'])
+                if from_vlan <= vlan_id <= to_vlan:
+                    return True
+        return False
+    except requests.RequestException as e:
+        print(f"Error during VLAN range lookup: {e}")
+        return False
